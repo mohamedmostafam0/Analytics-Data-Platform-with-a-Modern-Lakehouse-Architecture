@@ -18,7 +18,7 @@ create table if not exists users(
     email varchar(255),
     created_at timestamp default current_timestamp, 
     updated_at timestamp default current_timestamp
-)
+);
 
 create table if not exists items(
     id serial primary key, 
@@ -28,7 +28,7 @@ create table if not exists items(
     inventory int, 
     created_at timestamp default current_timestamp, 
     updated_at timestamp default current_timestamp
-)
+);
 
 create table if not exists purchases(
     id serial primary key, 
@@ -38,7 +38,7 @@ create table if not exists purchases(
     purchase_price decimal(12,2), 
     created_at timestamp default current_timestamp,
     updated_at timestamp default current_timestamp
-)
+);
 
 grant select on table users to readonly; 
 grant select on table items to readonly; 

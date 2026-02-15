@@ -30,15 +30,28 @@ services:
     volumes:
       - ./warehouse:/home/iceberg/warehouse
       - ./notebooks:/home/iceberg/notebooks/notebooks
+      - ./spark/scripts:/home/iceberg/scripts
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=${AWS_REGION}
     ports:
-      - 8888:8888
       - 8080:8080
       - 10000:10000
       - 10001:10001
+
+  loadgen:
+    build: loadgen/
+    container_name: loadgen
+    networks:
+      iceberg_net:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    env_file:
+      - ./loadgen/.env
 
   rest:
     image: apache/iceberg-rest-fixture
