@@ -104,6 +104,43 @@ Once the services are up and running, you can access them via the following inte
     spark.sql("CREATE TABLE demo.nyc.taxis (vendor_id bigint, trip_id bigint) USING iceberg")
     ```
 
+### 🏭 Running the Data Pipeline
+
+1.  **Generate Synthetic Data**:
+    The `loadgen` service simulates user traffic (MinIO) and purchases (Postgres).
+    ```bash
+    # Run the load generator (generates ~100 purchases and associated pageviews)
+    docker-compose run loadgen
+    ```
+
+2.  **Run Bronze Ingestion (Raw Data -> Iceberg Bronze Tables)**:
+    Ingest data from MinIO and Postgres into the Bronze layer.
+    ```bash
+    # Ingest Pageviews from MinIO (Streaming)
+    docker exec spark-iceberg spark-submit /home/iceberg/scripts/minio_loader.py
+
+    # Ingest Transactions from Postgres (Batch/Partitioned)
+    docker exec spark-iceberg spark-submit /home/iceberg/scripts/postgres_loader.py
+    ```
+
+3.  **Run Silver Transformation (Bronze -> Silver Tables)**:
+    Clean, enrich, and deduplicate data.
+    ```bash
+    docker exec spark-iceberg spark-submit /home/iceberg/scripts/bronze_to_silver_transformer.py
+    ```
+
+4.  **Verify Data**:
+    Use Jupyter Notebook to query the Silver tables:
+    ```python
+    spark.sql("SELECT * FROM silver.purchases_enriched LIMIT 10").show()
+    ```
+
+### 🧪 Running Tests
+To run the end-to-end pipeline tests:
+```bash
+docker exec spark-iceberg pytest /home/iceberg/scripts/tests/
+```
+
 ### 🗄️ Managing Data in MinIO
 
 1.  Go to [http://localhost:9001](http://localhost:9001).

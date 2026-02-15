@@ -1,122 +1,123 @@
+import config
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, concat_ws, upper, regexp_extract, lit, when
-from pyspark.sql.functions import hour, to_date
-from etl_utils import get_spark_session
+from pyspark.sql.functions import col, concat_ws, upper, regexp_extract, lit, when, hour, to_date
+from etl_utils import get_spark_session, write_to_iceberg
+import logging
+import sys
 
-# Initialize Spark session with Iceberg support
-spark = get_spark_session("Bronze to Silver Transformer")
+# Configure logging for this script
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("BronzeToSilver")
 
-bronze_users = spark.table("bronze.users")
-bronze_items = spark.table("bronze.items")
-bronze_purchases = spark.table("bronze.purchases")
-bronze_pageviews = spark.table("bronze.pageviews")
+def run_bronze_to_silver(spark=None):
+    created_spark = False
+    try:
+        if spark is None:
+            spark = get_spark_session("Bronze to Silver Transformer")
+            created_spark = True
+        
+        # 1. Process Users
+        try:
+            logger.info("Processing Users...")
+            bronze_users = spark.table("bronze.users")
+            email_regex = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+            
+            silver_users = (
+                bronze_users
+                .withColumn("valid_email", col("email").rlike(email_regex))
+                .withColumn("full_name", concat_ws(" ", col("first_name"), col("last_name")))
+                .select("id", "first_name", "last_name", "email", "created_at", "updated_at", "valid_email", "full_name")
+            )
+            write_to_iceberg(silver_users, "silver.users", mode="overwrite")
+            logger.info("Successfully processed Users.")
+        except Exception as e:
+            logger.error(f"Failed to process Users: {e}")
 
-# Define a simple email validation regex (basic, can be improved)
-email_regex = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+        # 2. Process Items
+        try:
+            logger.info("Processing Items...")
+            bronze_items = spark.table("bronze.items")
+            silver_items = (
+                bronze_items
+                .withColumn("price", when(col("price") < 0, lit(0)).otherwise(col("price")))
+                .withColumn("category", upper(col("category")))
+                .select("id", "name", "category", "price", "inventory", "created_at", "updated_at")
+            )
+            write_to_iceberg(silver_items, "silver.items", mode="overwrite")
+            logger.info("Successfully processed Items.")
+        except Exception as e:
+            logger.error(f"Failed to process Items: {e}")
 
-# Transformations:
-silver_users = (
-    bronze_users
-    .withColumn("valid_email", col("email").rlike(email_regex))
-    .withColumn("full_name", concat_ws(" ", col("first_name"), col("last_name")))
-)
+        # 3. Process Purchases Enriched
+        try:
+            logger.info("Processing Purchases Enriched...")
+            bronze_purchases = spark.table("bronze.purchases")
+            # Re-read tables if needed, or reuse DFs if caching strategies were used (omitted for simplicity)
+            bronze_users = spark.table("bronze.users") 
+            bronze_items = spark.table("bronze.items")
 
-silver_items = (
-    bronze_items
-    .withColumn("price", 
-        when(col("price") < 0, lit(0)).otherwise(col("price"))
-    )
-    .withColumn("category", upper(col("category")))
-)
+            silver_purchases = (
+                bronze_purchases
+                .join(bronze_users, bronze_purchases.user_id == bronze_users.id, "left")
+                .join(bronze_items, bronze_purchases.item_id == bronze_items.id, "left")
+                .select(
+                    bronze_purchases.id,
+                    bronze_purchases.user_id,
+                    bronze_purchases.item_id,
+                    bronze_purchases.quantity,
+                    bronze_purchases.purchase_price,
+                    (col("quantity") * col("purchase_price")).alias("total_price"),
+                    bronze_users.email.alias("user_email"),
+                    bronze_items.name.alias("item_name"),
+                    bronze_items.category.alias("item_category"),
+                    to_date(bronze_purchases.created_at).alias("purchase_date"),
+                    hour(bronze_purchases.created_at).alias("purchase_hour"),
+                    bronze_purchases.created_at,
+                    bronze_purchases.updated_at
+                )
+            )
+            write_to_iceberg(silver_purchases, "silver.purchases_enriched", mode="overwrite")
+            logger.info("Successfully processed Purchases Enriched.")
+        except Exception as e:
+            logger.error(f"Failed to process Purchases: {e}")
 
-# Join and enrich the purchases table
-silver_purchases = (
-    bronze_purchases
-    .join(bronze_users, bronze_purchases.user_id == bronze_users.id, "left")
-    .join(bronze_items, bronze_purchases.item_id == bronze_items.id, "left")
-    .select(
-        bronze_purchases.id,
-        bronze_purchases.user_id,
-        bronze_purchases.item_id,
-        bronze_purchases.quantity,
-        bronze_purchases.purchase_price,
-        (col("quantity") * col("purchase_price")).alias("total_price"),
-        bronze_users.email.alias("user_email"),
-        bronze_items.name.alias("item_name"),
-        bronze_items.category.alias("item_category"),
-        bronze_purchases.created_at,
-        bronze_purchases.updated_at
-    )
-)
+        # 4. Process Pageviews by Items
+        try:
+            logger.info("Processing Pageviews by Items...")
+            bronze_pageviews = spark.table("bronze.pageviews")
+            bronze_items = spark.table("bronze.items")
 
-# The url format is "/{page_name}/{item_id}"
-# Extract page_name and item_id using regex
-pageviews_with_item = bronze_pageviews.withColumn(
-    "page", regexp_extract(col("url"), r"^/([^/]+)/\d+$", 1)
-).withColumn(
-    "item_id", regexp_extract(col("url"), r"/(\d+)$", 1).cast("bigint")
-).filter(col("item_id").isNotNull())
+            pageviews_with_item = bronze_pageviews.withColumn(
+                "page", regexp_extract(col("url"), r"^/([^/]+)/\d+$", 1)
+            ).withColumn(
+                "item_id", regexp_extract(col("url"), r"/(\d+)$", 1).cast("bigint")
+            ).filter(col("item_id").isNotNull())
 
-# Join with items to get item_name and item_category
-silver_pageviews_by_items = (
-    pageviews_with_item
-    .join(bronze_items, pageviews_with_item.item_id == bronze_items.id, "left")
-    .select(
-        pageviews_with_item.user_id,
-        pageviews_with_item.item_id,
-        pageviews_with_item.page,
-        bronze_items.name.alias("item_name"),
-        bronze_items.category.alias("item_category"),
-        pageviews_with_item.channel,
-        pageviews_with_item.received_at
-    )
-)
+            silver_pageviews_by_items = (
+                pageviews_with_item
+                .join(bronze_items, pageviews_with_item.item_id == bronze_items.id, "left")
+                .select(
+                    pageviews_with_item.user_id,
+                    pageviews_with_item.item_id,
+                    pageviews_with_item.page,
+                    bronze_items.name.alias("item_name"),
+                    bronze_items.category.alias("item_category"),
+                    pageviews_with_item.channel,
+                    pageviews_with_item.received_at
+                )
+            )
+            write_to_iceberg(silver_pageviews_by_items, "silver.pageviews_by_items", mode="overwrite")
+            logger.info("Successfully processed Pageviews by Items.")
+        except Exception as e:
+            logger.error(f"Failed to process Pageviews: {e}")
 
-# Write to silver.users Iceberg table (overwrite or append as needed)
-(
-    silver_users
-    .select(
-        "id",
-        "first_name",
-        "last_name",
-        "email",
-        "created_at",
-        "updated_at",
-        "valid_email",
-        "full_name"
-    )
-    .writeTo("silver.users")
-    .overwritePartitions()
-)
+    except Exception as e:
+        logger.critical(f"Critical failure in Bronze to Silver job: {e}")
+        sys.exit(1) # Exit with a non-zero code to indicate failure
+    finally:
+        if created_spark and spark:
+            spark.stop()
+            logger.info("Spark session stopped.")
 
-# Write to silver.items Iceberg table (overwrite or append as needed)
-(
-    silver_items
-    .select(
-        "id",
-        "name",
-        "category",
-        "price",
-        "inventory",
-        "created_at",
-        "updated_at"
-    )
-    .writeTo("silver.items")
-    .overwritePartitions()
-)
-
-# Write to silver.purchases Iceberg table (overwrite or append as needed)
-(
-    silver_purchases
-    .writeTo("silver.purchases_enriched")
-    .overwritePartitions()
-)
-
-# Write to silver.pageviews_by_items Iceberg table
-(
-    silver_pageviews_by_items
-    .writeTo("silver.pageviews_by_items")
-    .overwritePartitions()
-)
-
-spark.stop()
+if __name__ == "__main__":
+    run_bronze_to_silver()

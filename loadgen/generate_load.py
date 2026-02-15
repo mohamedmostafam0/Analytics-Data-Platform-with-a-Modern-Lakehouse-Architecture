@@ -36,15 +36,21 @@ class LoadGenerator:
         # Postgres Configuration
         self.postgres_host = os.getenv("POSTGRES_HOST", "postgres")
         self.postgres_port = os.getenv("POSTGRES_PORT", "5432")
-        self.postgres_user = os.getenv("POSTGRES_USER", "postgresuser")
-        self.postgres_pass = os.getenv("POSTGRES_PASSWORD", "postgrespw")
+        self.postgres_user = os.getenv("POSTGRES_USER")
+        self.postgres_pass = os.getenv("POSTGRES_PASSWORD")
         self.postgres_db = os.getenv("POSTGRES_DB", "oneshop")
+
+        if not self.postgres_user or not self.postgres_pass:
+            raise EnvironmentError("Missing required Postgres credentials (POSTGRES_USER, POSTGRES_PASSWORD).")
 
         # MinIO Configuration
         self.minio_url = os.getenv("MINIO_URL", "http://minio:9000")
-        self.minio_access_key = os.getenv("MINIO_ACCESS_KEY", "admin")
-        self.minio_secret_key = os.getenv("MINIO_SECRET_KEY", "password")
+        self.minio_access_key = os.getenv("MINIO_ACCESS_KEY")
+        self.minio_secret_key = os.getenv("MINIO_SECRET_KEY")
         self.minio_bucket_name = os.getenv("MINIO_BUCKET_NAME", "pageviews")
+
+        if not self.minio_access_key or not self.minio_secret_key:
+            raise EnvironmentError("Missing required MinIO credentials (MINIO_ACCESS_KEY, MINIO_SECRET_KEY).")
 
         # Constants
         self.channels = ["organic search", "paid search", "referral", "social", "display"]

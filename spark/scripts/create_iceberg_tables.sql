@@ -62,7 +62,9 @@ USING iceberg
 PARTITIONED BY (days(received_at))
 TBLPROPERTIES (
     'format-version' = '2',
-    'comment' = 'Fact table for purchase transactions'
+    'comment' = 'Fact table for purchase transactions',
+    'write.spark.fanout.enabled' = 'true',
+    'write.distribution-mode' = 'none'
 );
 
 
