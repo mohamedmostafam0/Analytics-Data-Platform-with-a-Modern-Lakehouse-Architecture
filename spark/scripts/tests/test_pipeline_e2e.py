@@ -1,7 +1,10 @@
 import pytest
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, current_timestamp
 import sys
 import os
+import logging
+
+from config import Config
 
 # Import the main functions from our ETL scripts
 # We need to add the parent directory to sys.path in conftest, which we did.
@@ -9,7 +12,70 @@ from minio_loader import run_minio_loader
 from postgres_loader import run_postgres_loader
 from bronze_to_silver_transformer import run_bronze_to_silver
 
-@pytest.mark.usefixtures("clean_bronze_tables", "clean_silver_tables")
+@pytest.fixture(scope="function")
+def seed_data(spark):
+    """
+    Seeds MinIO and Postgres with test data.
+    """
+    logger = logging.getLogger("TestDataSeeder")
+    logger.info("Seeding test data...")
+    
+    # 1. Seed MinIO (Pageviews)
+    
+    # Bucket creation is handled by docker-compose (mc service)
+
+    pageviews_data = [
+        (1, "http://example.com/home", "organic", 1700000000),
+        (2, "http://example.com/product", "ads", 1700000005),
+    ]
+    # Use full S3A path which includes the bucket
+    spark.createDataFrame(pageviews_data, ["user_id", "url", "channel", "received_at"]) \
+        .write.mode("overwrite").json("s3a://pageviews/test_batch_1.json")
+        
+    # 2. Seed Postgres (Users, Items, Purchases)
+    
+    jdbc_url = f"jdbc:postgresql://{Config.postgres_host}:{Config.postgres_port}/{Config.postgres_db}"
+    jdbc_props = {
+        "user": Config.postgres_user,
+        "password": Config.postgres_password,
+        "driver": "org.postgresql.Driver"
+    }
+    
+    # Purchases (Write FIRST to drop the table and its FK constraints logic from Postgres side if relying on overwrite)
+    # Note: Spark's overwrite drops the table and recreates it without FK constraints usually.
+    # By writing purchases first, we remove the FK dependency on users/items, allowing them to be overwritten.
+    purchases_data = [
+        (1001, 1, 101, 2, 10.00, "2023-01-05 10:00:00"), 
+        (1002, 2, 102, 1, 20.00, "2023-01-05 11:00:00")
+    ]
+    spark.createDataFrame(purchases_data, ["id", "user_id", "item_id", "quantity", "purchase_price", "created_at"]) \
+        .withColumn("created_at", col("created_at").cast("timestamp")) \
+        .withColumn("updated_at", col("created_at")) \
+        .write.jdbc(jdbc_url, "purchases", mode="overwrite", properties=jdbc_props)
+
+    # Users
+    users_data = [
+        (1, "John", "Doe", "user1@example.com", "2023-01-01"), 
+        (2, "Jane", "Smith", "user2@example.com", "2023-01-02")
+    ]
+    spark.createDataFrame(users_data, ["id", "first_name", "last_name", "email", "created_at"]) \
+        .withColumn("created_at", col("created_at").cast("timestamp")) \
+        .withColumn("updated_at", col("created_at")) \
+        .write.jdbc(jdbc_url, "users", mode="overwrite", properties=jdbc_props)
+        
+    # Items
+    items_data = [
+        (101, "Widget A", "Widgets", 10.00, 100), 
+        (102, "Widget B", "Widgets", 20.00, 50)
+    ]
+    spark.createDataFrame(items_data, ["id", "name", "category", "price", "inventory"]) \
+        .withColumn("created_at", current_timestamp()) \
+        .withColumn("updated_at", current_timestamp()) \
+        .write.jdbc(jdbc_url, "items", mode="overwrite", properties=jdbc_props)
+
+    logger.info("Seeding complete.")
+
+@pytest.mark.usefixtures("clean_bronze_tables", "clean_silver_tables", "seed_data")
 def test_end_to_end_pipeline(spark):
     """
     Runs the full ETL pipeline:

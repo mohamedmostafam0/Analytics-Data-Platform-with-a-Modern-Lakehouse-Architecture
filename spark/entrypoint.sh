@@ -12,12 +12,22 @@ echo "Waiting for MinIO and REST Catalog..."
 # Simple wait loop to ensure services are ready
 sleep 10
 
-echo "Running Iceberg table creation script..."
+echo "Running Iceberg table creation scripts..."
 # We rely on spark-defaults.conf for catalog configuration
 $SPARK_HOME/bin/spark-sql \
     --master local[*] \
-    --name "Create Iceberg Tables" \
-    -f /home/iceberg/scripts/create_iceberg_tables.sql
+    --name "Create Bronze Tables" \
+    -f /home/iceberg/scripts/sql/bronze_schema.sql
+
+$SPARK_HOME/bin/spark-sql \
+    --master local[*] \
+    --name "Create Silver Tables" \
+    -f /home/iceberg/scripts/sql/silver_schema.sql
+
+$SPARK_HOME/bin/spark-sql \
+    --master local[*] \
+    --name "Create Gold Tables" \
+    -f /home/iceberg/scripts/sql/gold_schema.sql
 
 echo "Iceberg tables created (or verified existing)."
 

@@ -10,7 +10,7 @@ This service generates synthetic data to simulate a realistic e-commerce environ
 
 ## ⚙️ Configuration
 
-The following environment variables can be set in `.env` or `docker-compose.yaml`:
+The following environment variables can be set in the root `.env` file:
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |

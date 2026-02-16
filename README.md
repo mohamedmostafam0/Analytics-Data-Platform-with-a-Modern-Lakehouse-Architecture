@@ -4,42 +4,74 @@
 
 ## 🚀 Overview
 
-This project implements a **Modern Data Lakehouse** architecture, combining the best features of data lakes and data warehouses. It provides a robust, scalable, and open platform for data engineering, analytics, and machine learning workloads.
+This project implements a **Modern Data Lakehouse** architecture, combining the best features of data lakes and data warehouses. It provides a robust, scalable, and open platform for data engineering and analytics workloads.
 
-The platform is built on open standards, leveraging **Apache Iceberg** for table format, **Apache Spark** for compute, and **MinIO** for S3-compatible object storage.
+The platform follows the **Medallion Architecture** (Bronze → Silver → Gold) and is built on open standards, leveraging **Apache Iceberg** for table format, **Apache Spark** for compute, **Trino** for interactive queries, and **Apache Superset** for visualization.
 
 ## ✨ Key Features
 
--   **Open Table Format**: Uses Apache Iceberg for ACID transactions, time travel, and schema evolution.
--   **Scalable Compute**: Apache Spark 3.5 for large-scale data processing.
--   **S3-Compatible Storage**: MinIO provides a high-performance object storage layer.
--   **Interactive Development**: Jupyter Notebooks with PySpark and Iceberg integration.
--   **REST Catalog**: Centralized metadata management via Iceberg REST Catalog.
+-   **Open Table Format**: Apache Iceberg for ACID transactions, time travel, and schema evolution.
+-   **Scalable Compute**: Apache Spark 3.5 for large-scale data processing (ETL).
+-   **Interactive SQL**: Trino for low-latency, ad-hoc analytical queries.
+-   **BI & Visualization**: Apache Superset dashboards connected via Trino.
+-   **S3-Compatible Storage**: MinIO provides high-performance object storage.
+-   **REST Catalog**: Centralized Iceberg metadata management.
+-   **Medallion Architecture**: Bronze (raw) → Silver (cleaned) → Gold (aggregated).
 
 ## 🛠️ Tech Stack
 
-| Component | Technology | Version | Description |
-| :--- | :--- | :--- | :--- |
-| **Compute Engine** | [Apache Spark](https://spark.apache.org/) | 3.5.6 | Distributed data processing engine. |
-| **Table Format** | [Apache Iceberg](https://iceberg.apache.org/) | 1.9.0 | Open table format for huge analytic datasets. |
-| **Storage** | [MinIO](https://min.io/) | Latest | High-performance, S3-compatible object storage. |
-| **Catalog** | Iceberg REST | - | Lightweight catalog for Iceberg tables. |
-| **Orchestration** | Docker Compose | - | Container orchestration for local development. |
-| **IDE** | Jupyter | - | Interactive development environment. |
+| Component | Technology | Description |
+| :--- | :--- | :--- |
+| **Compute (ETL)** | [Apache Spark](https://spark.apache.org/) 3.5 | Batch data processing and transformations. |
+| **Query Engine** | [Trino](https://trino.io/) | Interactive SQL queries for analytics / BI. |
+| **Table Format** | [Apache Iceberg](https://iceberg.apache.org/) | Open table format for huge analytic datasets. |
+| **Storage** | [MinIO](https://min.io/) | S3-compatible object storage. |
+| **Catalog** | Iceberg REST | Centralized metadata catalog. |
+| **Visualization** | [Apache Superset](https://superset.apache.org/) | BI dashboards and data exploration. |
+| **OLTP Database** | [PostgreSQL](https://www.postgresql.org/) 18 | Source transactional database. |
+| **Data Generator** | Custom Python | Synthetic e-commerce data. |
+| **Orchestration** | Docker Compose | Local container orchestration. |
 
 ## 📂 Project Structure
 
-```bash
-.
-├── docker-compose.yaml        # Docker Compose configuration for all services
-├── .env                       # Environment variables (credentials, endpoints)
-├── .env.example               # Example environment variables for new setups
-├── lakehouse architecture.png # Architecture diagram
-├── README.md                  # Project documentation
-└── spark/                     # Spark image configuration
-    ├── Dockerfile             # Custom Spark image with Iceberg & AWS dependencies
-    ├── requirements.txt       # Python dependencies (PyIceberg, Jupyter, etc.)
-    └── spark-defaults.conf    # Spark default configuration (catalogs, extensions)
+```
+├── .env                            # Environment variables (single source of truth)
+├── .env.example                    # Template for new setups
+├── docker-compose.yaml             # All service definitions
+├── lakehouse-preparer.sh           # End-to-end pipeline orchestration script
+├── README.md
+│
+├── loadgen/                        # Synthetic data generator
+│   ├── Dockerfile
+│   ├── generate_load.py
+│   └── requirements.txt
+│
+├── postgres/                       # Postgres initialization
+│   └── postgres_bootstrap.sql
+│
+├── spark/                          # Spark image & ETL scripts
+│   ├── Dockerfile
+│   ├── entrypoint.sh
+│   ├── spark-defaults.conf
+│   └── scripts/
+│       ├── sql/                    # Iceberg DDL (per-layer)
+│       │   ├── bronze_schema.sql
+│       │   ├── silver_schema.sql
+│       │   └── gold_schema.sql
+│       ├── config.py               # Centralized configuration
+│       ├── etl_utils.py            # Shared utilities
+│       ├── minio_loader.py         # Bronze: MinIO → Iceberg
+│       ├── postgres_loader.py      # Bronze: Postgres → Iceberg
+│       ├── bronze_to_silver_transformer.py
+│       ├── silver_to_gold_transformer.py
+│       └── tests/
+│
+├── superset/                       # Superset image config
+│   └── Dockerfile
+│
+└── trino/                          # Trino catalog config
+    └── etc/catalog/
+        └── iceberg.properties
 ```
 
 ## ⚡ Getting Started
@@ -58,91 +90,112 @@ The platform is built on open standards, leveraging **Apache Iceberg** for table
     ```
 
 2.  **Configure Environment**:
-    Copy the example environment file to `.env`:
     ```bash
     cp .env.example .env
     ```
-    *Note: The default credentials in `.env.example` work out-of-the-box for local development.*
+    > The defaults work out-of-the-box for local development.
 
 3.  **Start the Services**:
-    Build and start the Docker containers:
     ```bash
     docker-compose up -d --build
     ```
 
-4.  **Verify Installation**:
-    Check if all containers are running:
+4.  **Run the Data Pipeline**:
     ```bash
-    docker-compose ps
-    ```
-
-## 🖥️ Usage
-
-Once the services are up and running, you can access them via the following interfaces:
-
-| Service | access URL | Credentials (Default) |
-| :--- | :--- | :--- |
-| **Jupyter Notebook** | [http://localhost:8888](http://localhost:8888) | None (Token disabled) |
-| **MinIO Console** | [http://localhost:9001](http://localhost:9001) | User: `admin`, Pass: `password` |
-| **MinIO API** | `http://localhost:9000` | - |
-| **Iceberg REST** | `http://localhost:8181` | - |
-| **Spark History** | `http://localhost:18080` | - |
-
-### 📓 Running Notebooks
-
-1.  Open your browser and navigate to [http://localhost:8888](http://localhost:8888).
-2.  You will see the `notebooks/` directory (mapped from your local `./notebooks` folder).
-3.  Create a new Python notebook.
-4.  Spark is pre-configured with Iceberg. You can start running Spark code immediately:
-
-    ```python
-    from pyspark.sql import SparkSession
-
-    spark = SparkSession.builder.getOrCreate()
-
-    # Create an Iceberg table
-    spark.sql("CREATE TABLE demo.nyc.taxis (vendor_id bigint, trip_id bigint) USING iceberg")
-    ```
-
-### 🏭 Running the Data Pipeline
-
-1.  **Generate Synthetic Data**:
-    The `loadgen` service simulates user traffic (MinIO) and purchases (Postgres).
-    ```bash
-    # Run the load generator (generates ~100 purchases and associated pageviews)
+    # Generate synthetic data
     docker-compose run loadgen
+
+    # Run full pipeline (schemas → ingest → transform)
+    chmod +x lakehouse-preparer.sh
+    ./lakehouse-preparer.sh
     ```
 
-2.  **Run Bronze Ingestion (Raw Data -> Iceberg Bronze Tables)**:
-    Ingest data from MinIO and Postgres into the Bronze layer.
-    ```bash
-    # Ingest Pageviews from MinIO (Streaming)
-    docker exec spark-iceberg spark-submit /home/iceberg/scripts/minio_loader.py
+## 🖥️ Services
 
-    # Ingest Transactions from Postgres (Batch/Partitioned)
-    docker exec spark-iceberg spark-submit /home/iceberg/scripts/postgres_loader.py
-    ```
+| Service | URL | Credentials |
+| :--- | :--- | :--- |
+| **Superset** | [http://localhost:8088](http://localhost:8088) | `admin` / `admin` |
+| **Trino** | `http://localhost:9090` | — |
+| **MinIO Console** | [http://localhost:9001](http://localhost:9001) | `minioadmin` / `minioadmin` |
+| **MinIO API** | `http://localhost:9000` | — |
+| **Iceberg REST** | `http://localhost:8181` | — |
+| **Spark UI** | [http://localhost:8080](http://localhost:8080) | — |
+| **PostgreSQL** | `localhost:5432` | `admin` / `password` |
 
-3.  **Run Silver Transformation (Bronze -> Silver Tables)**:
-    Clean, enrich, and deduplicate data.
-    ```bash
-    docker exec spark-iceberg spark-submit /home/iceberg/scripts/bronze_to_silver_transformer.py
-    ```
+## 🏭 Data Pipeline
 
-4.  **Verify Data**:
-    Use Jupyter Notebook to query the Silver tables:
-    ```python
-    spark.sql("SELECT * FROM silver.purchases_enriched LIMIT 10").show()
-    ```
+The pipeline follows the Medallion Architecture:
+
+```
+Sources                    Bronze              Silver                Gold
+┌──────────┐          ┌────────────┐     ┌───────────────┐    ┌──────────────────┐
+│ Postgres │──JDBC──▶ │ users      │──▶  │ users         │    │ top_selling_items │
+│ (Users,  │          │ items      │     │ items         │──▶ │ sales_perf_24h   │
+│  Items,  │          │ purchases  │──▶  │ purchases_    │    │ top_converting   │
+│  Purch.) │          │            │     │   enriched    │    │ pageviews_by_ch  │
+└──────────┘          └────────────┘     └───────────────┘    └──────────────────┘
+┌──────────┐          ┌────────────┐     ┌───────────────┐
+│ MinIO    │──S3────▶ │ pageviews  │──▶  │ pageviews_    │
+│ (JSON)   │          │ (+ DLQ)    │     │   by_items    │
+└──────────┘          └────────────┘     └───────────────┘
+```
+
+### Running Individual Steps
+
+```bash
+# 1. Generate data
+docker-compose run loadgen
+
+# 2. Create schemas
+docker-compose exec spark-iceberg /opt/spark/bin/spark-sql -f /home/iceberg/scripts/sql/bronze_schema.sql
+docker-compose exec spark-iceberg /opt/spark/bin/spark-sql -f /home/iceberg/scripts/sql/silver_schema.sql
+docker-compose exec spark-iceberg /opt/spark/bin/spark-sql -f /home/iceberg/scripts/sql/gold_schema.sql
+
+# 3. Ingest to Bronze
+docker-compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/minio_loader.py
+docker-compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/postgres_loader.py
+
+# 4. Transform Bronze → Silver
+docker-compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/bronze_to_silver_transformer.py
+
+# 5. Transform Silver → Gold
+docker-compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/silver_to_gold_transformer.py
+```
 
 ### 🧪 Running Tests
-To run the end-to-end pipeline tests:
+
 ```bash
 docker exec spark-iceberg pytest /home/iceberg/scripts/tests/
 ```
 
-### 🗄️ Managing Data in MinIO
+## 📸 Screenshots
 
-1.  Go to [http://localhost:9001](http://localhost:9001).
-2.  Login with `admin` / `password`.
-3.  You can view the `warehouse` bucket where Iceberg data (metadata, snapshots, data files) is stored.
+### Superset Dashboard
+<!-- TODO: Add screenshot of Superset dashboard with Gold layer charts -->
+![Superset Dashboard](screenshots/superset-dashboard.png)
+
+### MinIO Console
+<!-- TODO: Add screenshot of MinIO console showing warehouse bucket -->
+![MinIO Console](screenshots/minio-console.png)
+
+### Trino Query Results
+<!-- TODO: Add screenshot of Trino querying gold tables -->
+![Trino Query](screenshots/trino-query.png)
+
+### Spark UI
+<!-- TODO: Add screenshot of Spark UI showing completed ETL jobs -->
+![Spark UI](screenshots/spark-ui.png)
+
+---
+
+## 🔍 Querying Data
+
+### Via Trino (CLI)
+```bash
+docker exec trino trino --execute "SELECT * FROM iceberg.gold.top_selling_items ORDER BY total_revenue DESC LIMIT 10"
+```
+
+### Via Superset
+1. Open [http://localhost:8088](http://localhost:8088) and login with `admin` / `admin`.
+2. Add a Trino database connection: `trino://trino@trino:8080/iceberg`.
+3. Create charts and dashboards from the `gold` schema tables.

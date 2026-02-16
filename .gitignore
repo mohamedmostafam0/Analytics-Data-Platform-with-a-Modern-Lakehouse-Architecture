@@ -1,2 +1,18 @@
 .env
+loadgen/.env
 __pycache__/
+*.pyc
+.ipynb_checkpoints/
+.idea/
+.vscode/
+*.log
+
+# Data Directories
+warehouse/
+superset/superset_home/
+superset/superset_db_data/
+metastore_db/
+spark-warehouse/
+
+# Secrets
+trino/etc/catalog/iceberg.properties

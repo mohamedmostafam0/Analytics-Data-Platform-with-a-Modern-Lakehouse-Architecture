@@ -7,10 +7,9 @@ services:
       iceberg_net:
     ports:
       - 5432:5432
+    env_file:
+      - .env
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
       - PGPASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ./postgres/postgres_bootstrap.sql:/docker-entrypoint-initdb.d/postgres_bootstrap.sql
@@ -18,6 +17,7 @@ services:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 1s
       start_period: 60s
+
   spark-iceberg:
     image: tabulario/spark-iceberg
     container_name: spark-iceberg
@@ -31,15 +31,8 @@ services:
       - ./warehouse:/home/iceberg/warehouse
       - ./notebooks:/home/iceberg/notebooks/notebooks
       - ./spark/scripts:/home/iceberg/scripts
-    environment:
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION}
-      - CATALOG_WAREHOUSE=${CATALOG_WAREHOUSE}
-      - CATALOG_S3_ENDPOINT=${CATALOG_S3_ENDPOINT}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+    env_file:
+      - .env
     ports:
       - 8080:8080
       - 10000:10000
@@ -56,7 +49,7 @@ services:
       minio:
         condition: service_started
     env_file:
-      - ./loadgen/.env
+      - .env
 
   rest:
     image: apache/iceberg-rest-fixture
@@ -65,20 +58,16 @@ services:
       iceberg_net:
     ports:
       - 8181:8181
+    env_file:
+      - .env
     environment:
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION}
-      - CATALOG_WAREHOUSE=${CATALOG_WAREHOUSE}
       - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
-      - CATALOG_S3_ENDPOINT=${CATALOG_S3_ENDPOINT}
+
   minio:
     image: minio/minio
     container_name: minio
-    environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-      - MINIO_DOMAIN=${MINIO_DOMAIN}
+    env_file:
+      - .env
     networks:
       iceberg_net:
         aliases:
@@ -87,6 +76,7 @@ services:
       - 9001:9001
       - 9000:9000
     command: [ "server", "/data", "--console-address", ":9001" ]
+
   mc:
     depends_on:
       - minio
@@ -94,17 +84,71 @@ services:
     container_name: mc
     networks:
       iceberg_net:
-    environment:
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION}
+    env_file:
+      - .env
     entrypoint: |
       /bin/sh -c "
       until (/usr/bin/mc alias set minio ${CATALOG_S3_ENDPOINT} ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}) do echo '...waiting...' && sleep 1; done;
       /usr/bin/mc rm -r --force minio/warehouse;
       /usr/bin/mc mb minio/warehouse;
+      /usr/bin/mc mb minio/pageviews;
       /usr/bin/mc anonymous set public minio/warehouse;
       tail -f /dev/null
       "
+
+  trino:
+    image: 'trinodb/trino'
+    hostname: trino
+    container_name: trino
+    volumes:
+      - ./trino/etc/catalog:/etc/trino/catalog
+    ports:
+      - '9090:8080'
+    networks:
+      iceberg_net:
+
+
+  superset:
+    build: ./superset
+    container_name: superset
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      ADMIN_FIRST_NAME: Superset
+      ADMIN_LAST_NAME: Admin
+      ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL}
+      DATABASE_URL: postgresql+psycopg2://${SUPERSET_DB_USER}:${SUPERSET_DB_PASSWORD}@superset-db:5432/${SUPERSET_DB}
+    depends_on:
+      - superset-db
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./superset/superset_home:/app/superset_home
+    networks:
+      iceberg_net:
+    command: >
+      /bin/sh -c "
+        superset db upgrade &&
+        superset fab create-admin --username ${SUPERSET_ADMIN_USERNAME} --firstname Superset --lastname Admin --email ${SUPERSET_ADMIN_EMAIL} --password ${SUPERSET_ADMIN_PASSWORD} || true &&
+        superset init &&
+        superset run -h 0.0.0.0 -p 8088
+      "
+
+  superset-db:
+    image: postgres:18
+    container_name: superset-db
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${SUPERSET_DB}
+      POSTGRES_USER: ${SUPERSET_DB_USER}
+      POSTGRES_PASSWORD: ${SUPERSET_DB_PASSWORD}
+    volumes:
+      - ./superset/superset_db_data:/var/lib/postgresql/data
+    networks:
+      iceberg_net:
+
+
 networks:
   iceberg_net:

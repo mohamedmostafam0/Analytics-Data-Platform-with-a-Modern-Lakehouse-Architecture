@@ -54,11 +54,17 @@ def get_spark_session(app_name):
 
     return SparkSession.builder \
         .appName(app_name) \
-        .config("spark.hadoop.fs.s3a.endpoint", s3_endpoint) \
-        .config("spark.hadoop.fs.s3a.access.key", access_key) \
-        .config("spark.hadoop.fs.s3a.secret.key", secret_key) \
-        .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+        .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+        .config("spark.hadoop.fs.s3.endpoint", s3_endpoint) \
+        .config("spark.hadoop.fs.s3a.endpoint", s3_endpoint) \
+        .config("spark.hadoop.fs.s3.access.key", access_key) \
+        .config("spark.hadoop.fs.s3a.access.key", access_key) \
+        .config("spark.hadoop.fs.s3.secret.key", secret_key) \
+        .config("spark.hadoop.fs.s3a.secret.key", secret_key) \
+        .config("spark.hadoop.fs.s3.path.style.access", "true") \
+        .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+        .config("spark.hadoop.fs.s3.connection.ssl.enabled", "false") \
         .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
         .getOrCreate()
 

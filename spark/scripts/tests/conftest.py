@@ -70,7 +70,7 @@ def clean_bronze_tables(spark, init_database):
     Since we have init_database, we can just drop and let init handle creation, 
     but for speed/simplicity let's use the init_database fixture to ensure they exist.
     """
-    tables = ["bronze.users", "bronze.items", "bronze.purchases", "bronze.pageviews"]
+    tables = ["bronze.users", "bronze.items", "bronze.purchases", "bronze.pageviews", "bronze.pageviews_dlq"]
     for table in tables:
         spark.sql(f"DROP TABLE IF EXISTS {table}")
     

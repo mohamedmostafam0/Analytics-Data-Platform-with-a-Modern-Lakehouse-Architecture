@@ -2,8 +2,12 @@ import os
 import sys
 from pyspark.sql.functions import current_timestamp, col
 from etl_utils import get_spark_session, write_to_iceberg, retry_with_backoff
+import logging
+from config import Config
 
-# ... imports ...
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("PostgresLoader")
 
 @retry_with_backoff(retries=3, backoff_in_seconds=5)
 def get_jdbc_options(table_name):
