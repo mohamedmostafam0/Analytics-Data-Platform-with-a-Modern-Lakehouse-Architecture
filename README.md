@@ -28,18 +28,28 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 | **Storage** | [MinIO](https://min.io/) | S3-compatible object storage. |
 | **Catalog** | Iceberg REST | Centralized metadata catalog. |
 | **Visualization** | [Apache Superset](https://superset.apache.org/) | BI dashboards and data exploration. |
+| **Orchestration** | [Apache Airflow](https://airflow.apache.org/) 2.8 | DAG-based workflow orchestration. |
 | **OLTP Database** | [PostgreSQL](https://www.postgresql.org/) 18 | Source transactional database. |
 | **Data Generator** | Custom Python | Synthetic e-commerce data. |
-| **Orchestration** | Docker Compose | Local container orchestration. |
+| **Email (Dev)** | [MailHog](https://github.com/mailhog/MailHog) | Local SMTP server for testing email alerts. |
+| **Containerization** | Docker Compose | Local container orchestration. |
 
 ## 📂 Project Structure
 
 ```
 ├── .env                            # Environment variables (single source of truth)
 ├── .env.example                    # Template for new setups
-├── docker-compose.yaml             # All service definitions
+├── docker-compose.yaml             # Core services (Spark, Trino, MinIO, Superset, Postgres)
+├── airflow.yaml                    # Airflow services (webserver, scheduler, DB, MailHog)
 ├── lakehouse-preparer.sh           # End-to-end pipeline orchestration script
 ├── README.md
+│
+├── airflow/                        # Airflow orchestration
+│   ├── dockerfile
+│   └── dags/
+│       ├── user_engagement_segments_dag.py
+│       └── sql/
+│           └── trino.sql           # Gold-layer segmentation query
 │
 ├── loadgen/                        # Synthetic data generator
 │   ├── Dockerfile
@@ -67,7 +77,8 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 │       └── tests/
 │
 ├── superset/                       # Superset image config
-│   └── Dockerfile
+│   ├── Dockerfile
+│   └── init_connections.py         # Auto-creates Trino database connection
 │
 └── trino/                          # Trino catalog config
     └── etc/catalog/
@@ -95,15 +106,20 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
     ```
     > The defaults work out-of-the-box for local development.
 
-3.  **Start the Services**:
+3.  **Start the Core Services**:
     ```bash
-    docker-compose up -d --build
+    docker compose up -d --build
     ```
 
-4.  **Run the Data Pipeline**:
+4.  **Start Airflow** (optional):
+    ```bash
+    docker compose -f airflow.yaml up -d --build
+    ```
+
+5.  **Run the Data Pipeline**:
     ```bash
     # Generate synthetic data
-    docker-compose run loadgen
+    docker compose run loadgen
 
     # Run full pipeline (schemas → ingest → transform)
     chmod +x lakehouse-preparer.sh
@@ -115,12 +131,14 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 | Service | URL | Credentials |
 | :--- | :--- | :--- |
 | **Superset** | [http://localhost:8088](http://localhost:8088) | `admin` / `admin` |
+| **Airflow** | [http://localhost:8085](http://localhost:8085) | `admin` / `admin` |
+| **MailHog** | [http://localhost:8025](http://localhost:8025) | — |
 | **Trino** | `http://localhost:9090` | — |
 | **MinIO Console** | [http://localhost:9001](http://localhost:9001) | `minioadmin` / `minioadmin` |
 | **MinIO API** | `http://localhost:9000` | — |
 | **Iceberg REST** | `http://localhost:8181` | — |
 | **Spark UI** | [http://localhost:8080](http://localhost:8080) | — |
-| **PostgreSQL** | `localhost:5432` | `admin` / `password` |
+| **PostgreSQL** | `localhost:5432` | See `.env` |
 
 ## 🏭 Data Pipeline
 
@@ -128,17 +146,19 @@ The pipeline follows the Medallion Architecture:
 
 ```
 Sources                    Bronze              Silver                Gold
-┌──────────┐          ┌────────────┐     ┌───────────────┐    ┌──────────────────┐
-│ Postgres │──JDBC──▶ │ users      │──▶  │ users         │    │ top_selling_items │
-│ (Users,  │          │ items      │     │ items         │──▶ │ sales_perf_24h   │
-│  Items,  │          │ purchases  │──▶  │ purchases_    │    │ top_converting   │
-│  Purch.) │          │            │     │   enriched    │    │ pageviews_by_ch  │
-└──────────┘          └────────────┘     └───────────────┘    └──────────────────┘
-┌──────────┐          ┌────────────┐     ┌───────────────┐
+┌──────────┐          ┌────────────┐     ┌───────────────┐    ┌──────────────────────┐
+│ Postgres │──JDBC──▶ │ users      │──▶  │ users         │    │ top_selling_items    │
+│ (Users,  │          │ items      │     │ items         │──▶ │ sales_perf_24h       │
+│  Items,  │          │ purchases  │──▶  │ purchases_    │    │ top_converting       │
+│  Purch.) │          │            │     │   enriched    │    │ pageviews_by_ch      │
+└──────────┘          └────────────┘     └───────────────┘    │ user_engagement_segs │
+┌──────────┐          ┌────────────┐     ┌───────────────┐    └──────────────────────┘
 │ MinIO    │──S3────▶ │ pageviews  │──▶  │ pageviews_    │
 │ (JSON)   │          │ (+ DLQ)    │     │   by_items    │
 └──────────┘          └────────────┘     └───────────────┘
 ```
+
+> **Note:** `user_engagement_segments` is computed by the Airflow DAG (via Trino), not by Spark.
 
 ### Running Individual Steps
 
@@ -197,5 +217,11 @@ docker exec trino trino --execute "SELECT * FROM iceberg.gold.top_selling_items 
 
 ### Via Superset
 1. Open [http://localhost:8088](http://localhost:8088) and login with `admin` / `admin`.
-2. Add a Trino database connection: `trino://trino@trino:8080/iceberg`.
+2. The Trino database connection (`trino://trino@trino:8080/iceberg`) is auto-created at startup.
 3. Create charts and dashboards from the `gold` schema tables.
+
+### Via Airflow
+1. Open [http://localhost:8085](http://localhost:8085) and login with `admin` / `admin`.
+2. Trino and MinIO connections are auto-created via `AIRFLOW_CONN_` env vars.
+3. Enable the `user_engagement_segments_dag` to run the daily segmentation pipeline.
+4. Check email alerts in [MailHog](http://localhost:8025).

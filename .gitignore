@@ -13,6 +13,6 @@ superset/superset_home/
 superset/superset_db_data/
 metastore_db/
 spark-warehouse/
-
+airflow/db
 # Secrets
 trino/etc/catalog/iceberg.properties

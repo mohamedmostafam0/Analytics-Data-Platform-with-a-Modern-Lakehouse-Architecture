@@ -52,3 +52,22 @@ TBLPROPERTIES (
     'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Pageview counts aggregated by traffic channel'
 );
+
+CREATE TABLE IF NOT EXISTS gold.user_engagement_segments (
+    user_id BIGINT,
+    email STRING,
+    full_name STRING,
+    total_pageviews BIGINT,
+    active_days BIGINT,
+    last_active_date DATE,
+    days_since_last_active BIGINT,
+    engagement_segment STRING,
+    segment_date DATE
+)
+USING iceberg
+PARTITIONED BY (segment_date)
+TBLPROPERTIES (
+    'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
+    'comment' = 'Daily user engagement segments partitioned by computation date'
+);
