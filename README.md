@@ -1,6 +1,6 @@
 # Analytics Data Platform with a Modern Lakehouse Architecture
 
-![Lakehouse Architecture](lakehouse%20architecture.png)
+![Lakehouse Architecture](docs/architecture.svg)
 
 ## 🚀 Overview
 

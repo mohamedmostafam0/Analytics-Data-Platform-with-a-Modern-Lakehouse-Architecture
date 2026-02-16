@@ -1,0 +1,290 @@
+direction: right
+
+title: |md
+  # Analytics Data Platform — Modern Lakehouse Architecture
+| {
+  near: top-center
+  style: {
+    font-size: 28
+    bold: true
+  }
+}
+
+# ──────────────────────────────────────────────────
+# Data Sources
+# ──────────────────────────────────────────────────
+sources: Data Sources {
+  style: {
+    fill: "#F0F4FF"
+    stroke: "#4A6FA5"
+    border-radius: 12
+    font-size: 18
+    bold: true
+  }
+
+  postgres: PostgreSQL 18\n(OLTP — Users, Items, Purchases) {
+    icon: https://icons.terrastruct.com/dev%2Fpostgresql.svg
+    shape: image
+  }
+
+  minio_raw: MinIO Raw JSON\n(Pageview Events) {
+    icon: https://cdn.simpleicons.org/minio/C72E49
+    shape: image
+  }
+
+  loadgen: Load Generator\n(Python — E-commerce simulator) {
+    icon: https://cdn.simpleicons.org/python/3776AB
+    shape: image
+  }
+
+  loadgen -> postgres: Users\nItems\nPurchases {
+    style: {
+      stroke: "#666"
+      stroke-dash: 3
+    }
+  }
+  loadgen -> minio_raw: Pageview\nJSON {
+    style: {
+      stroke: "#666"
+      stroke-dash: 3
+    }
+  }
+}
+
+# ──────────────────────────────────────────────────
+# Lakehouse Storage
+# ──────────────────────────────────────────────────
+lakehouse: Lakehouse Storage (MinIO + Apache Iceberg) {
+  style: {
+    fill: "#FFF8E7"
+    stroke: "#D4A843"
+    border-radius: 12
+    font-size: 18
+    bold: true
+  }
+
+  minio: MinIO S3\n(Object Storage) {
+    icon: https://cdn.simpleicons.org/minio/C72E49
+    shape: image
+  }
+
+  catalog: Iceberg REST\nCatalog {
+    icon: https://avatars.githubusercontent.com/u/61715785?s=200&v=4
+    shape: image
+  }
+
+  minio -> catalog: metadata {
+    style: {
+      stroke: "#999"
+      stroke-dash: 3
+    }
+  }
+
+  bronze: Bronze Layer (Raw) {
+    style: {
+      fill: "#CD7F32"
+      font-color: "#FFF"
+      border-radius: 8
+      font-size: 14
+      bold: true
+    }
+    users_b: users
+    items_b: items
+    purchases_b: purchases
+    pageviews_b: pageviews
+    dlq: pageviews_dlq
+  }
+
+  silver: Silver Layer (Cleaned) {
+    style: {
+      fill: "#C0C0C0"
+      font-color: "#333"
+      border-radius: 8
+      font-size: 14
+      bold: true
+    }
+    users_s: users
+    items_s: items
+    purchases_s: purchases_enriched
+    pageviews_s: pageviews_by_items
+  }
+
+  gold: Gold Layer (Analytics) {
+    style: {
+      fill: "#FFD700"
+      font-color: "#333"
+      border-radius: 8
+      font-size: 14
+      bold: true
+    }
+    top_selling: top_selling_items
+    sales_perf: sales_performance_24h
+    top_convert: top_converting_items
+    pageviews_ch: pageviews_by_channel
+    engagement: user_engagement_segments
+  }
+
+  bronze -> silver: Clean · Enrich · Deduplicate {
+    style: {
+      stroke: "#888"
+      font-size: 12
+    }
+  }
+  silver -> gold: Aggregate · Analyze {
+    style: {
+      stroke: "#888"
+      font-size: 12
+    }
+  }
+}
+
+# ──────────────────────────────────────────────────
+# Compute & Orchestration
+# ──────────────────────────────────────────────────
+compute: Compute & Orchestration {
+  style: {
+    fill: "#F0FFF0"
+    stroke: "#4CAF50"
+    border-radius: 12
+    font-size: 18
+    bold: true
+  }
+
+  spark: Apache Spark 3.5\n(Batch ETL — Bronze → Silver → Gold) {
+    icon: https://cdn.simpleicons.org/apachespark/E25A1C
+    shape: image
+  }
+
+  airflow: Apache Airflow 2.8\n(DAG Orchestration — Scheduling) {
+    icon: https://cdn.simpleicons.org/apacheairflow/017CEE
+    shape: image
+  }
+
+  airflow_db: Airflow Metadata DB\n(PostgreSQL) {
+    icon: https://icons.terrastruct.com/dev%2Fpostgresql.svg
+    shape: image
+  }
+
+  mailhog: MailHog\n(Dev SMTP — Email Alerts) {
+    icon: https://cdn.simpleicons.org/maildotru/FF6600
+    shape: image
+  }
+
+  airflow -> airflow_db: metadata {
+    style: {
+      stroke: "#999"
+      stroke-dash: 3
+    }
+  }
+  airflow -> mailhog: alerts {
+    style: {
+      stroke: "#FF6600"
+      stroke-dash: 3
+    }
+  }
+}
+
+# ──────────────────────────────────────────────────
+# Analytics & BI
+# ──────────────────────────────────────────────────
+analytics: Analytics & BI {
+  style: {
+    fill: "#F8F0FF"
+    stroke: "#7B68EE"
+    border-radius: 12
+    font-size: 18
+    bold: true
+  }
+
+  trino: Trino\n(Interactive SQL — Federated Queries) {
+    icon: https://cdn.simpleicons.org/trino/DD00A1
+    shape: image
+  }
+
+  superset: Apache Superset\n(BI Dashboards — Data Exploration) {
+    icon: https://cdn.simpleicons.org/apachesuperset/20A6C9
+    shape: image
+  }
+
+  superset_db: Superset Metadata DB\n(PostgreSQL) {
+    icon: https://icons.terrastruct.com/dev%2Fpostgresql.svg
+    shape: image
+  }
+
+  trino -> superset: SQL results {
+    style: {
+      stroke: "#7B68EE"
+    }
+  }
+  superset -> superset_db: metadata {
+    style: {
+      stroke: "#999"
+      stroke-dash: 3
+    }
+  }
+}
+
+# ──────────────────────────────────────────────────
+# Data Flow Connections
+# ──────────────────────────────────────────────────
+
+# Ingestion
+sources.postgres -> lakehouse.bronze: JDBC {
+  style: {
+    stroke: "#4A6FA5"
+    stroke-width: 2
+    font-size: 12
+  }
+}
+sources.minio_raw -> lakehouse.bronze: Structured Streaming {
+  style: {
+    stroke: "#C72E49"
+    stroke-width: 2
+    font-size: 12
+  }
+}
+
+# Spark reads/writes Lakehouse
+compute.spark -> lakehouse: PySpark ETL {
+  style: {
+    stroke: "#E25A1C"
+    stroke-width: 2
+    font-size: 12
+  }
+}
+
+# Airflow orchestrates Gold via Trino
+compute.airflow -> analytics.trino: Trino SQL (Gold DAGs) {
+  style: {
+    stroke: "#017CEE"
+    stroke-width: 2
+    font-size: 12
+  }
+}
+
+# Airflow uploads exports to MinIO
+compute.airflow -> lakehouse.minio: CSV exports {
+  style: {
+    stroke: "#017CEE"
+    stroke-dash: 3
+    font-size: 12
+  }
+}
+
+# Trino reads Lakehouse
+analytics.trino -> lakehouse: Iceberg queries {
+  style: {
+    stroke: "#DD00A1"
+    stroke-width: 2
+    font-size: 12
+  }
+}
+
+# Trino reads catalog
+analytics.trino -> lakehouse.catalog: catalog metadata {
+  style: {
+    stroke: "#999"
+    stroke-dash: 3
+    font-size: 11
+  }
+}
