@@ -14,6 +14,7 @@ USING iceberg
 PARTITIONED BY (days(created_at))
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Dimension table for user information'
 );
 
@@ -31,6 +32,7 @@ USING iceberg
 PARTITIONED BY (category)
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Dimension table for product items'
 );
 
@@ -48,6 +50,7 @@ USING iceberg
 PARTITIONED BY (days(created_at))
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Fact table for purchase transactions'
 );
 
@@ -63,6 +66,7 @@ USING iceberg
 PARTITIONED BY (days(received_at))
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Fact table for purchase transactions',
     'write.spark.fanout.enabled' = 'true',
     'write.distribution-mode' = 'none'
@@ -78,5 +82,6 @@ CREATE TABLE IF NOT EXISTS bronze.pageviews_dlq (
 USING iceberg
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Dead Letter Queue for malformed pageviews'
 );

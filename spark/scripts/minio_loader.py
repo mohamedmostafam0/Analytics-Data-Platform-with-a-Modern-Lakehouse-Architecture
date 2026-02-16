@@ -70,7 +70,7 @@ def run_minio_loader(spark=None):
                 .outputMode("append")
                 .trigger(availableNow=True)
                 .option("path", "bronze.pageviews")
-                .option("checkpointLocation", "/tmp/checkpoints/bronze_pageviews")
+                .option("checkpointLocation", "s3a://warehouse/_checkpoints/bronze_pageviews")
                 .start()
             )
             
@@ -82,7 +82,7 @@ def run_minio_loader(spark=None):
                 .outputMode("append")
                 .trigger(availableNow=True)
                 .option("path", "bronze.pageviews_dlq")
-                .option("checkpointLocation", "/tmp/checkpoints/bronze_pageviews_dlq")
+                .option("checkpointLocation", "s3a://warehouse/_checkpoints/bronze_pageviews_dlq")
                 .start()
             )
             

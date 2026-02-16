@@ -16,6 +16,7 @@ def run_bronze_to_silver(spark=None):
             spark = get_spark_session("Bronze to Silver Transformer")
             created_spark = True
         
+        failures = []
         # 1. Process Users
         try:
             logger.info("Processing Users...")
@@ -32,6 +33,7 @@ def run_bronze_to_silver(spark=None):
             logger.info("Successfully processed Users.")
         except Exception as e:
             logger.error(f"Failed to process Users: {e}")
+            failures.append(("Users", str(e)))
 
         # 2. Process Items
         try:
@@ -47,6 +49,7 @@ def run_bronze_to_silver(spark=None):
             logger.info("Successfully processed Items.")
         except Exception as e:
             logger.error(f"Failed to process Items: {e}")
+            failures.append(("Items", str(e)))
 
         # 3. Process Purchases Enriched
         try:
@@ -80,6 +83,7 @@ def run_bronze_to_silver(spark=None):
             logger.info("Successfully processed Purchases Enriched.")
         except Exception as e:
             logger.error(f"Failed to process Purchases: {e}")
+            failures.append(("Purchases", str(e)))
 
         # 4. Process Pageviews by Items
         try:
@@ -110,10 +114,15 @@ def run_bronze_to_silver(spark=None):
             logger.info("Successfully processed Pageviews by Items.")
         except Exception as e:
             logger.error(f"Failed to process Pageviews: {e}")
+            failures.append(("Pageviews", str(e)))
+
+        if failures:
+            failed_steps = ", ".join(s for s, _ in failures)
+            raise RuntimeError(f"Bronze-to-Silver failed for: {failed_steps}")
 
     except Exception as e:
         logger.critical(f"Critical failure in Bronze to Silver job: {e}")
-        sys.exit(1) # Exit with a non-zero code to indicate failure
+        raise
     finally:
         if created_spark and spark:
             spark.stop()

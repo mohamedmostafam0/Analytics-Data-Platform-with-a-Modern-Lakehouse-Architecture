@@ -38,6 +38,7 @@ def run_postgres_loader(spark=None):
             created_spark = True
         
         tables_to_load = ["users", "items", "purchases"]
+        failures = []
         
         for table in tables_to_load:
             logger.info(f"Processing {table} from Postgres...")
@@ -59,7 +60,6 @@ def run_postgres_loader(spark=None):
                 watermark = None
                 try:
                     # Check if target table exists and get max updated_at
-                    # We use a try-except block because table might not exist on first run
                     rows = spark.sql(f"SELECT max(updated_at) FROM {target_table}").collect()
                     if rows and rows[0][0]:
                         watermark = rows[0][0]
@@ -75,7 +75,7 @@ def run_postgres_loader(spark=None):
                     read_options["partitionColumn"] = "id"
                     read_options["lowerBound"] = str(min_id)
                     read_options["upperBound"] = str(max_id)
-                    read_options["numPartitions"] = "10" # Adjust based on executor count/data size
+                    read_options["numPartitions"] = "10"
 
                 # Apply Watermark Filter
                 if watermark:
@@ -97,9 +97,15 @@ def run_postgres_loader(spark=None):
                 
             except Exception as e:
                 logger.error(f"Error processing table {table}: {e}")
+                failures.append((table, str(e)))
+        
+        if failures:
+            failed_tables = ", ".join(t for t, _ in failures)
+            raise RuntimeError(f"Postgres loader failed for tables: {failed_tables}")
     
     except Exception as e:
         logger.critical(f"Critical failure in Postgres loader: {e}")
+        raise
     finally:
         if created_spark and spark:
             spark.stop()

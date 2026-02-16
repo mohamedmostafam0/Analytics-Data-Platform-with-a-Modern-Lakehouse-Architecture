@@ -70,30 +70,16 @@ class LoadGenerator:
         )
 
     def setup_bucket(self):
-        """Ensures the MinIO bucket exists and is empty."""
+        """Ensures the MinIO bucket exists, preserving any existing data."""
         try:
             if self.minio_client.bucket_exists(self.minio_bucket_name):
-                logger.info(f"Bucket '{self.minio_bucket_name}' already exists. Deleting it...")
-                self._delete_bucket_contents()
-                self.minio_client.remove_bucket(self.minio_bucket_name)
-                logger.info(f"Bucket '{self.minio_bucket_name}' deleted successfully.")
-            
-            logger.info(f"Creating bucket '{self.minio_bucket_name}'...")
-            self.minio_client.make_bucket(self.minio_bucket_name)
-            logger.info(f"Bucket '{self.minio_bucket_name}' created.")
+                logger.info(f"Bucket '{self.minio_bucket_name}' already exists.")
+            else:
+                logger.info(f"Creating bucket '{self.minio_bucket_name}'...")
+                self.minio_client.make_bucket(self.minio_bucket_name)
+                logger.info(f"Bucket '{self.minio_bucket_name}' created.")
         except S3Error as e:
-            logger.error(f"Error checking, deleting, or creating bucket: {e}")
-            raise
-
-    def _delete_bucket_contents(self):
-        """Helper to delete all objects in the bucket."""
-        try:
-            objects = self.minio_client.list_objects(self.minio_bucket_name, recursive=True)
-            for obj in objects:
-                logger.info(f"Deleting object: {obj.object_name}")
-                self.minio_client.remove_object(self.minio_bucket_name, obj.object_name)
-        except S3Error as err:
-            logger.error(f"Error deleting bucket contents: {err}")
+            logger.error(f"Error setting up bucket: {e}")
             raise
 
     def generate_pageview(self, viewer_id, target_id, page_type):

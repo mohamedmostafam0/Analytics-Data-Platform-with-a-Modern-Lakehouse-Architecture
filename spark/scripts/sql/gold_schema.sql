@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS gold.top_selling_items (
 USING iceberg
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Top selling items by total revenue'
 );
 
@@ -20,6 +21,7 @@ CREATE TABLE IF NOT EXISTS gold.sales_performance_24h (
 USING iceberg
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Sales performance aggregated by hour (last 24h)'
 );
 
@@ -36,6 +38,7 @@ CREATE TABLE IF NOT EXISTS gold.top_converting_items (
 USING iceberg
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Items with highest pageview-to-purchase conversion rate'
 );
 
@@ -46,5 +49,6 @@ CREATE TABLE IF NOT EXISTS gold.pageviews_by_channel (
 USING iceberg
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Pageview counts aggregated by traffic channel'
 );

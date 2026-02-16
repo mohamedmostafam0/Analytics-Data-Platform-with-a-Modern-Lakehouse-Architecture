@@ -5,14 +5,9 @@ Uses same pattern as bronze_to_silver for consistency
 """
 
 import logging
+import config
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, sum as _sum, count, when, abs as _abs
-import sys
-import os
-
-# Add parent directory to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
+from pyspark.sql.functions import col, sum as _sum, count, when
 from etl_utils import get_spark_session, write_to_iceberg
 
 # Configure logging
@@ -34,11 +29,10 @@ def create_top_selling_items(spark: SparkSession):
     logger.info(f"✓ gold.top_selling_items created: {df.count()} rows")
 
 def create_sales_performance_24h(spark: SparkSession):
-    """Create 24h sales performance by hour"""
+    """Create sales performance aggregated by hour"""
     logger.info("Creating gold.sales_performance_24h...")
     
     df = spark.table("silver.purchases_enriched") \
-        .where(col("created_at") >= spark.sql("SELECT CURRENT_TIMESTAMP - INTERVAL '24' HOUR").first()[0]) \
         .groupBy("purchase_hour") \
         .agg(_sum("total_price").alias("total_revenue"))
     

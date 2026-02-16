@@ -15,6 +15,7 @@ USING iceberg
 PARTITIONED BY (days(created_at))
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Validated dimension table for user information'
 );
 
@@ -31,6 +32,7 @@ USING iceberg
 PARTITIONED BY (category)
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Dimension table for product items'
 );
 
@@ -53,6 +55,7 @@ USING iceberg
 PARTITIONED BY (days(created_at))
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Validated and enriched fact table for purchase transactions'
 );
 
@@ -69,5 +72,6 @@ USING iceberg
 PARTITIONED BY (days(received_at))
 TBLPROPERTIES (
     'format-version' = '2',
+    'write.parquet.compression-codec' = 'snappy',
     'comment' = 'Fact table for purchase transactions'
 );

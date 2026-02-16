@@ -12,7 +12,7 @@ class AppConfig:
     # Postgres
     postgres_user: Optional[str] = None
     postgres_password: Optional[str] = None
-    postgres_db: str = "oneshop"
+    postgres_db: str = "lakehouse"
     postgres_host: str = "postgres"
     postgres_port: str = "5432"
     

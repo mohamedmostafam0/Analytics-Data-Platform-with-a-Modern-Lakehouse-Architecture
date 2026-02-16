@@ -85,16 +85,12 @@ def write_to_iceberg(df, table_name, mode="append"):
     spark.sql(f"CREATE DATABASE IF NOT EXISTS {db_name}")
 
     try:
-        # Use simple count for logging (note: this triggers an action)
-        record_count = df.count()
-        logger.info(f"Preparing to write {record_count} records to {table_name}")
-
         if mode == "overwrite":
             df.writeTo(table_name).overwritePartitions()
         else:
             df.writeTo(table_name).append()
             
-        logger.info(f"Successfully wrote records to {table_name}")
+        logger.info(f"Successfully wrote to {table_name}")
     except Exception as e:
         logger.error(f"Error writing to {table_name}: {e}")
-        raise e
+        raise

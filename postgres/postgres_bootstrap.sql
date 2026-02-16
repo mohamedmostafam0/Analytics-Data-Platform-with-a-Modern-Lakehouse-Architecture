@@ -2,7 +2,11 @@ CREATE USER etluser WITH PASSWORD 'etlpassword';
 
 CREATE ROLE readonly;
 
-grant connect on database oneshop to readonly;
+DO $$
+BEGIN
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO readonly', current_database());
+END
+$$;
 grant usage on schema public to readonly;
 grant select on all tables in schema public to readonly;
 

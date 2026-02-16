@@ -76,6 +76,8 @@ services:
       - 9001:9001
       - 9000:9000
     command: [ "server", "/data", "--console-address", ":9001" ]
+    volumes:
+      - minio_data:/data
 
   mc:
     depends_on:
@@ -89,9 +91,8 @@ services:
     entrypoint: |
       /bin/sh -c "
       until (/usr/bin/mc alias set minio ${CATALOG_S3_ENDPOINT} ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}) do echo '...waiting...' && sleep 1; done;
-      /usr/bin/mc rm -r --force minio/warehouse;
-      /usr/bin/mc mb minio/warehouse;
-      /usr/bin/mc mb minio/pageviews;
+      /usr/bin/mc mb --ignore-existing minio/warehouse;
+      /usr/bin/mc mb --ignore-existing minio/pageviews;
       /usr/bin/mc anonymous set public minio/warehouse;
       tail -f /dev/null
       "
@@ -149,6 +150,60 @@ services:
     networks:
       iceberg_net:
 
+
+x-airflow-common: &airflow-common
+  build:
+    context: ./airflow
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-db/${AIRFLOW_DB}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY}
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'True'
+    AIRFLOW__SMTP__SMTP_HOST: mailhog
+    AIRFLOW__SMTP__SMTP_PORT: 1025
+    AIRFLOW__SMTP__SMTP_MAIL_FROM: airflow@example.com
+    AIRFLOW__SMTP__SMTP_STARTTLS: 'False'
+    AIRFLOW__SMTP__SMTP_SSL: 'False'
+    AIRFLOW__SMTP__SMTP_USER: ''
+    AIRFLOW__SMTP__SMTP_PASSWORD: ''
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+  networks:
+    iceberg_net:
+  depends_on:
+    - airflow-db
+
+  airflow-db:
+    container_name: airflow-db
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${AIRFLOW_DB_USER}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      POSTGRES_DB: ${AIRFLOW_DB}
+    volumes:
+      - ./airflow/db:/var/lib/postgresql/data
+    networks:
+      iceberg_net:
+
+
+  airflow-webserver:
+    container_name: airflow-webserver
+    <<: *airflow-common
+    ports:
+      - "8080:8080"
+    command: webserver
+  airflow-scheduler:
+    container_name: airflow-scheduler
+    <<: *airflow-common
+    command: scheduler
+  airflow-init:
+    container_name: airflow-init
+    <<: *airflow-common
+    command: >
+      bash -c "
+        airflow db init &&
+        airflow users create --username ${AIRFLOW_ADMIN_USER} --password ${AIRFLOW_ADMIN_PASSWORD} --firstname Admin --lastname User --role Admin --email ${AIRFLOW_ADMIN_EMAIL}
+      "
 
 networks:
   iceberg_net:
