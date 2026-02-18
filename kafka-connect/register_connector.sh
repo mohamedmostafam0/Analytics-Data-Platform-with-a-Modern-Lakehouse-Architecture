@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Configuration
-CONNECT_HOST="localhost"
-CONNECT_PORT="8083"
-CONFIG_DIR="/kafka-connect"
-MAX_RETRIES=30
-RETRY_INTERVAL=2
+CONNECT_HOST="${CONNECT_HOST:-localhost}"
+CONNECT_PORT="${CONNECT_PORT:-8083}"
+CONFIG_DIR="${CONFIG_DIR:-/kafka-connect}"
+MAX_RETRIES=${MAX_RETRIES:-30}
+RETRY_INTERVAL=${RETRY_INTERVAL:-2}
 
 # Check for required tools (envsubst)
 if ! command -v envsubst &> /dev/null; then
