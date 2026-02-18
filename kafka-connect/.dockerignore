@@ -1,0 +1,6 @@
+# Only the Dockerfile is needed for this build (no COPY instructions use local files)
+*.json
+*.sh
+*.md
+README.md
+verify_pipeline.sh

@@ -1,0 +1,6 @@
+# Data directories (mounted as volumes at runtime)
+superset_db_data/
+superset_home/
+__pycache__/
+*.pyc
+README.md

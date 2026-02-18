@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Documentation
+docs/
+README.md
+*.md
+*.png
+*.svg
+
+# Environment files (secrets)
+.env
+.env.example
+
+# Data directories (mounted as volumes, not needed in build)
+warehouse/
+notebooks/
+superset/superset_db_data/
+superset/superset_home/
+
+# Airflow
+airflow/
+
+# Debug logs
+*.log
+
+# Docker Compose (not needed inside containers)
+docker-compose.yaml
+airflow.yaml
+lakehouse-preparer.sh
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
+Thumbs.db
