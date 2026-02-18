@@ -1,0 +1,12 @@
+FROM python:3.9.9-bullseye
+
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /workdir
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+ENTRYPOINT ["python", "item_seeder.py"]

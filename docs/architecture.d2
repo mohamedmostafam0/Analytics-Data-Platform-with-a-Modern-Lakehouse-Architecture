@@ -22,7 +22,7 @@ sources: Data Sources {
     bold: true
   }
 
-  postgres: PostgreSQL 18\n(OLTP — Users, Items, Purchases) {
+  postgres: PostgreSQL 18\n(OLTP — oneshop)\n(Users, Items, Purchases) {
     icon: https://icons.terrastruct.com/dev%2Fpostgresql.svg
     shape: image
   }
@@ -185,6 +185,48 @@ compute: Compute & Orchestration {
 }
 
 # ──────────────────────────────────────────────────
+# Real-time Streaming
+# ──────────────────────────────────────────────────
+streaming: Real-time Streaming {
+  style: {
+    fill: "#E6F3FF"
+    stroke: "#2196F3"
+    border-radius: 12
+    font-size: 18
+    bold: true
+  }
+
+  kafka: Apache Kafka\n(Event Streaming) {
+    icon: https://cdn.simpleicons.org/apachekafka/231F20
+    shape: image
+  }
+
+  connect: Kafka Connect\n(Debezium + Sink) {
+    icon: https://cdn.simpleicons.org/apachekafka/231F20
+    shape: image
+  }
+
+  schema: Schema Registry\n(Avro Schemas) {
+    icon: https://avatars.githubusercontent.com/u/10534221?s=200&v=4
+    shape: image
+  }
+
+  opensearch: OpenSearch\n(Search & Analytics) {
+    icon: https://avatars.githubusercontent.com/u/83810493?s=200&v=4
+    shape: image
+  }
+
+  redpanda: Redpanda Console\n(Topic UI) {
+    icon: https://avatars.githubusercontent.com/u/74641951?s=200&v=4
+    shape: image
+  }
+
+  connect -> kafka: events
+  connect -> schema: avro/json
+  kafka -> redpanda: monitor
+}
+
+# ──────────────────────────────────────────────────
 # Analytics & BI
 # ──────────────────────────────────────────────────
 analytics: Analytics & BI {
@@ -239,6 +281,23 @@ sources.postgres -> lakehouse.bronze: JDBC {
 sources.minio_raw -> lakehouse.bronze: Structured Streaming {
   style: {
     stroke: "#C72E49"
+    stroke-width: 2
+    font-size: 12
+  }
+}
+
+# CDC Pipeline
+sources.postgres -> streaming.connect: CDC (Wal) {
+  style: {
+    stroke: "#2196F3"
+    stroke-width: 2
+    font-size: 12
+  }
+}
+
+streaming.connect -> streaming.opensearch: Indexing {
+  style: {
+    stroke: "#005EB8"
     stroke-width: 2
     font-size: 12
   }

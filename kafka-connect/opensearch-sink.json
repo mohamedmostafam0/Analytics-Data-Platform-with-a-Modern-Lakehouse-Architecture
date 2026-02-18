@@ -1,0 +1,21 @@
+{
+    "name": "opensearch-sink-connector",
+    "config": {
+        "connector.class": "io.aiven.kafka.connect.opensearch.OpensearchSinkConnector",
+        "tasks.max": "1",
+        "topics": "dbz.public.items",
+        "connection.url": "http://opensearch:9200",
+        "type.name": "_doc",
+        "key.ignore": "false",
+        "schema.ignore": "true",
+        "behavior.on.null.values": "ignore",
+        "key.converter": "io.confluent.connect.avro.AvroConverter",
+        "value.converter": "io.confluent.connect.avro.AvroConverter",
+        "key.converter.schema.registry.url": "http://schema-registry:8081",
+        "value.converter.schema.registry.url": "http://schema-registry:8081",
+        "transforms": "renameTopic",
+        "transforms.renameTopic.type": "org.apache.kafka.connect.transforms.RegexRouter",
+        "transforms.renameTopic.regex": "dbz.public.(.*)",
+        "transforms.renameTopic.replacement": "$1"
+    }
+}

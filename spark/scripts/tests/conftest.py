@@ -20,7 +20,7 @@ TEST_CONFIG = {
     "s3_endpoint": "http://minio:9000",
     "postgres_user": "postgresuser",
     "postgres_password": "postgrespw",
-    "postgres_db": "lakehouse",
+    "postgres_db": "oneshop",
     "postgres_host": "postgres",
     "postgres_port": "5432",
 }

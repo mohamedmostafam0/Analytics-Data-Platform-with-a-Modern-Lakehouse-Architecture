@@ -26,9 +26,9 @@ create table if not exists users(
 
 create table if not exists items(
     id serial primary key, 
-    name varchar(100), 
+    name varchar(255) NOT NULL, 
     category varchar(100), 
-    price decimal(7,2), 
+    price decimal(10,2), 
     inventory int, 
     created_at timestamp default current_timestamp, 
     updated_at timestamp default current_timestamp

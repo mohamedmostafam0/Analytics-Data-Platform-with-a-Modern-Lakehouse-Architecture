@@ -12,6 +12,8 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 
 -   **Open Table Format**: Apache Iceberg for ACID transactions, time travel, and schema evolution.
 -   **Scalable Compute**: Apache Spark 3.5 for large-scale data processing (ETL).
+-   **Real-time Streaming**: Kafka + Debezium for Change Data Capture (CDC) from Postgres.
+-   **Search & Analytics**: OpenSearch for full-text search and log analytics.
 -   **Interactive SQL**: Trino for low-latency, ad-hoc analytical queries.
 -   **BI & Visualization**: Apache Superset dashboards connected via Trino.
 -   **S3-Compatible Storage**: MinIO provides high-performance object storage.
@@ -23,6 +25,10 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 | Component | Technology | Description |
 | :--- | :--- | :--- |
 | **Compute (ETL)** | [Apache Spark](https://spark.apache.org/) 3.5 | Batch data processing and transformations. |
+| **Streaming** | [Apache Kafka](https://kafka.apache.org/) | Event streaming platform. |
+| **CDC** | [Debezium](https://debezium.io/) | Change Data Capture for Postgres. |
+| **Search Engine** | [OpenSearch](https://opensearch.org/) | Distributed search and analytics engine. |
+| **Schema Registry** | [Confluent Schema Registry](https://docs.confluent.io/platform/current/schema-registry/index.html) | Avro schema management. |
 | **Query Engine** | [Trino](https://trino.io/) | Interactive SQL queries for analytics / BI. |
 | **Table Format** | [Apache Iceberg](https://iceberg.apache.org/) | Open table format for huge analytic datasets. |
 | **Storage** | [MinIO](https://min.io/) | S3-compatible object storage. |
@@ -58,6 +64,12 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 │
 ├── postgres/                       # Postgres initialization
 │   └── postgres_bootstrap.sql
+│
+├── kafka-connect/                  # Streaming Pipeline Configs
+│   ├── Dockerfile
+│   ├── connector.json              # Debezium Source Config
+│   ├── opensearch-sink.json        # OpenSearch Sink Config
+│   └── register_connector.sh
 │
 ├── spark/                          # Spark image & ETL scripts
 │   ├── Dockerfile
@@ -137,6 +149,9 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 | **MinIO Console** | [http://localhost:9001](http://localhost:9001) | `minioadmin` / `minioadmin` |
 | **MinIO API** | `http://localhost:9000` | — |
 | **Iceberg REST** | `http://localhost:8181` | — |
+| **Redpanda Console** | [http://localhost:8084](http://localhost:8084) | — |
+| **Schema Registry** | [http://localhost:8081](http://localhost:8081) | — |
+| **OpenSearch** | [http://localhost:9200](http://localhost:9200) | — |
 | **Spark UI** | [http://localhost:8080](http://localhost:8080) | — |
 | **PostgreSQL** | `localhost:5432` | See `.env` |
 
@@ -159,6 +174,15 @@ Sources                    Bronze              Silver                Gold
 ```
 
 > **Note:** `user_engagement_segments` is computed by the Airflow DAG (via Trino), not by Spark.
+
+### Real-time Streaming Pipeline
+
+```
+┌──────────┐      ┌────────────┐      ┌────────────┐      ┌──────────────┐
+│ Postgres │──CDC─▶ Kafka Topic │──Sink─▶ OpenSearch │──API─▶ Architecture │
+│ (Items)  │      │ (Avro)     │      │ (Items)    │      │ Diagram / UI │
+└──────────┘      └────────────┘      └──────────────┘      └──────────────┘
+```
 
 ### Running Individual Steps
 
@@ -191,20 +215,17 @@ docker exec spark-iceberg pytest /home/iceberg/scripts/tests/
 ## 📸 Screenshots
 
 ### Superset Dashboard
-<!-- TODO: Add screenshot of Superset dashboard with Gold layer charts -->
-![Superset Dashboard](screenshots/superset-dashboard.png)
+![Superset Dashboard](docs/screenshots/superset-dashboard.png)
 
 ### MinIO Console
-<!-- TODO: Add screenshot of MinIO console showing warehouse bucket -->
-![MinIO Console](screenshots/minio-console.png)
+![MinIO Console](docs/screenshots/minio-console.png)
 
-### Trino Query Results
-<!-- TODO: Add screenshot of Trino querying gold tables -->
-![Trino Query](screenshots/trino-query.png)
+### Airflow DAG Graph
+![Airflow DAG](docs/screenshots/airflow-dag-graph.png)
 
 ### Spark UI
 <!-- TODO: Add screenshot of Spark UI showing completed ETL jobs -->
-![Spark UI](screenshots/spark-ui.png)
+<!-- ![Spark UI](screenshots/spark-ui.png) -->
 
 ---
 

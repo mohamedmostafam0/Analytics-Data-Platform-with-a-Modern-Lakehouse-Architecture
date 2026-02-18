@@ -1,4 +1,181 @@
 services:
+  connect:
+    container_name: connect
+    build:
+      context: ./kafka-connect
+    depends_on:
+      - kafka
+      - debezium-postgres
+      - schema-registry
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: connect-configs
+      OFFSET_STORAGE_TOPIC: connect-offsets
+      STATUS_STORAGE_TOPIC: connect-status
+      KEY_CONVERTER: io.confluent.connect.avro.AvroConverter
+      VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_REST_ADVERTISED_HOST_NAME: connect
+      PLUGIN_PATH: /kafka/connect
+
+  debezium-postgres:
+    container_name: debezium-postgres
+    hostname: postgres
+    image: debezium/postgres:17
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ${CDC_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${CDC_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${CDC_POSTGRES_DB}
+    volumes:
+      - ./postgres/postgres_bootstrap.sql:/docker-entrypoint-initdb.d/postgres_bootstrap.sql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${CDC_POSTGRES_USER} -d ${CDC_POSTGRES_DB}" ]
+      interval: 1s
+      start_period: 60s
+    networks:
+      iceberg_net:
+
+
+  items-loadgen:
+    build: items-loadgen
+    container_name: items-loadgen
+    init: true
+    networks:
+      iceberg_net:
+    depends_on:
+      debezium-postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: debezium-postgres
+      POSTGRES_DB: ${CDC_POSTGRES_DB}
+      POSTGRES_USER: ${CDC_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${CDC_POSTGRES_PASSWORD}
+
+  kafka:
+    container_name: kafka
+    image: apache/kafka:4.1.1
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft settings
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: controller,broker
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # General settings
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list" ]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    networks:
+      iceberg_net:
+        aliases:
+          - kafka
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.0
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    networks:
+      iceberg_net:
+
+
+  loadgen:
+    build: loadgen/
+    container_name: loadgen
+    networks:
+      iceberg_net:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    env_file:
+      - .env
+
+  mc:
+    depends_on:
+      - minio
+    image: minio/mc
+    container_name: mc
+    networks:
+      iceberg_net:
+    env_file:
+      - .env
+    entrypoint: |
+      /bin/sh -c "
+      until (/usr/bin/mc alias set minio ${CATALOG_S3_ENDPOINT} ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}) do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc mb --ignore-existing minio/warehouse;
+      /usr/bin/mc mb --ignore-existing minio/pageviews;
+      /usr/bin/mc anonymous set public minio/warehouse;
+      tail -f /dev/null
+      "
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    env_file:
+      - .env
+    networks:
+      iceberg_net:
+        aliases:
+          - warehouse.minio
+    ports:
+      - 9001:9001
+      - 9000:9000
+    command: [ "server", "/data", "--console-address", ":9001" ]
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: opensearch
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "DISABLE_INSTALL_DEMO_CONFIG=true"
+      - "DISABLE_SECURITY_PLUGIN=true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+
   postgres:
     image: postgres:18
     hostname: postgres
@@ -17,6 +194,50 @@ services:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 1s
       start_period: 60s
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    container_name: redpanda-console
+    ports:
+      - "8084:8080"
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_SCHEMAREGISTRY_Enabled: "true"
+      KAFKA_SCHEMAREGISTRY_URLS: http://schema-registry:8081
+    networks:
+      iceberg_net:
+
+
+  connector-setup:
+    image: curlimages/curl
+    container_name: connector-setup
+    depends_on:
+      - connect
+    volumes:
+      - ./kafka-connect:/kafka-connect
+    working_dir: /kafka-connect
+    environment:
+      CONNECT_HOST: connect
+      CONNECT_PORT: 8083
+      CDC_POSTGRES_USER: ${CDC_POSTGRES_USER}
+      CDC_POSTGRES_PASSWORD: ${CDC_POSTGRES_PASSWORD}
+      CDC_POSTGRES_DB: ${CDC_POSTGRES_DB}
+    command: [ "/bin/sh", "/kafka-connect/register_connector.sh" ]
+    networks:
+      iceberg_net:
+
+
+  rest:
+    image: apache/iceberg-rest-fixture
+    container_name: iceberg-rest
+    networks:
+      iceberg_net:
+    ports:
+      - 8181:8181
+    env_file:
+      - .env
+    environment:
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
 
   spark-iceberg:
     image: tabulario/spark-iceberg
@@ -37,77 +258,6 @@ services:
       - 8080:8080
       - 10000:10000
       - 10001:10001
-
-  loadgen:
-    build: loadgen/
-    container_name: loadgen
-    networks:
-      iceberg_net:
-    depends_on:
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_started
-    env_file:
-      - .env
-
-  rest:
-    image: apache/iceberg-rest-fixture
-    container_name: iceberg-rest
-    networks:
-      iceberg_net:
-    ports:
-      - 8181:8181
-    env_file:
-      - .env
-    environment:
-      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
-
-  minio:
-    image: minio/minio
-    container_name: minio
-    env_file:
-      - .env
-    networks:
-      iceberg_net:
-        aliases:
-          - warehouse.minio
-    ports:
-      - 9001:9001
-      - 9000:9000
-    command: [ "server", "/data", "--console-address", ":9001" ]
-    volumes:
-      - minio_data:/data
-
-  mc:
-    depends_on:
-      - minio
-    image: minio/mc
-    container_name: mc
-    networks:
-      iceberg_net:
-    env_file:
-      - .env
-    entrypoint: |
-      /bin/sh -c "
-      until (/usr/bin/mc alias set minio ${CATALOG_S3_ENDPOINT} ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}) do echo '...waiting...' && sleep 1; done;
-      /usr/bin/mc mb --ignore-existing minio/warehouse;
-      /usr/bin/mc mb --ignore-existing minio/pageviews;
-      /usr/bin/mc anonymous set public minio/warehouse;
-      tail -f /dev/null
-      "
-
-  trino:
-    image: 'trinodb/trino'
-    hostname: trino
-    container_name: trino
-    volumes:
-      - ./trino/etc/catalog:/etc/trino/catalog
-    ports:
-      - '9090:8080'
-    networks:
-      iceberg_net:
-
 
   superset:
     build: ./superset
@@ -153,5 +303,21 @@ services:
       iceberg_net:
 
 
+  trino:
+    image: 'trinodb/trino'
+    hostname: trino
+    container_name: trino
+    volumes:
+      - ./trino/etc/catalog:/etc/trino/catalog
+    ports:
+      - '9090:8080'
+    networks:
+      iceberg_net:
+
+
 networks:
   iceberg_net:
+
+
+volumes:
+  minio_data:
