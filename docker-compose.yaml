@@ -33,7 +33,6 @@ services:
 
   debezium-postgres:
     container_name: debezium-postgres
-    hostname: postgres
     image: debezium/postgres:17
     ports:
       - "5433:5432"
@@ -52,7 +51,7 @@ services:
 
 
   items-loadgen:
-    build: items-loadgen
+    build: load-generators/items-load
     container_name: items-loadgen
     init: true
     networks:
@@ -97,6 +96,22 @@ services:
         aliases:
           - kafka
 
+  kafka-setup:
+    image: apache/kafka:4.1.1
+    container_name: kafka-setup
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: >
+      bash -c "
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic login-events --partitions 1 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic login-events-enriched --partitions 1 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --topic login-anomalies --partitions 1 --replication-factor 1
+      "
+    networks:
+      iceberg_net:
+
+
   schema-registry:
     image: confluentinc/cp-schema-registry:7.6.0
     hostname: schema-registry
@@ -114,7 +129,7 @@ services:
 
 
   loadgen:
-    build: loadgen/
+    build: load-generators/sys-load/
     container_name: loadgen
     networks:
       iceberg_net:
@@ -223,7 +238,7 @@ services:
 
 
   connector-setup:
-    image: alpine:latest
+    image: debian:bookworm-slim
     container_name: connector-setup
     depends_on:
       - connect
@@ -236,7 +251,7 @@ services:
       CDC_POSTGRES_USER: ${CDC_POSTGRES_USER}
       CDC_POSTGRES_PASSWORD: ${CDC_POSTGRES_PASSWORD}
       CDC_POSTGRES_DB: ${CDC_POSTGRES_DB}
-    entrypoint: [ "/bin/sh", "-c", "apk add --no-cache curl gettext && /kafka-connect/register_connector.sh" ]
+    entrypoint: [ "/bin/bash", "-c", "apt-get update && apt-get install -y curl gettext-base dos2unix jq && dos2unix /kafka-connect/register_connector.sh && bash /kafka-connect/register_connector.sh" ]
     networks:
       iceberg_net:
 
@@ -330,26 +345,43 @@ services:
 
 
   flashsale-loadgen:
-    build: flashsale-loadgen
+    build: load-generators/flashsale-load
     container_name: flashsale-loadgen
     init: true
     depends_on:
-      postgres:
+      debezium-postgres:
         condition: service_healthy
+    environment:
+      POSTGRES_HOST: debezium-postgres
+      POSTGRES_DB: ${CDC_POSTGRES_DB}
+      POSTGRES_USER: ${CDC_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${CDC_POSTGRES_PASSWORD}
+      USERS_SEED_COUNT: 1000
+      ITEM_SEED_COUNT: 100
+      PURCHASE_GEN_EVERY_MS: 500
+    networks:
+      iceberg_net:
+
 
   clickhouse:
-    image: clickhouse/clickhouse-server
+    image: clickhouse/clickhouse-server:24.8
     container_name: clickhouse
     volumes:
-      - ./clickhouse/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml
+      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-mysecret}
     ports:
-      - "9000:9000"
+      - "9002:9000"
       - "8123:8123"
     ulimits:
       nproc: 65535
       nofile:
         soft: 262144
         hard: 262144
+    networks:
+      iceberg_net:
+
 
   streamlit:
     build: streamlit
@@ -359,6 +391,46 @@ services:
       - "8501:8501"
     depends_on:
       - clickhouse
+    networks:
+      iceberg_net:
+
+
+  jobmanager:
+    image: flink:1.17.2-scala_2.12-java11
+    container_name: jobmanager
+    ports:
+      - 8081:8081
+    command: jobmanager
+    volumes:
+      - ./flink/sql:/opt/flink/flink-sql
+      - ./flink/lib/flink-sql-connector-kafka-1.17.2.jar:/opt/flink/lib/flink-sql-connector-kafka-1.17.2.jar
+      - ./ip_geo.csv:/opt/flink/ip_geo.csv
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager        
+    networks:
+      iceberg_net:
+
+
+  taskmanager:
+    image: flink:1.17.2-scala_2.12-java11
+    container_name: taskmanager
+    depends_on:
+      - jobmanager
+    command: taskmanager
+    scale: 1
+    volumes:
+      - ./flink/lib/flink-sql-connector-kafka-1.17.2.jar:/opt/flink/lib/flink-sql-connector-kafka-1.17.2.jar
+      - ./ip_geo.csv:/opt/flink/ip_geo.csv
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 20
+    networks:
+      iceberg_net:
+
 
 networks:
   iceberg_net:

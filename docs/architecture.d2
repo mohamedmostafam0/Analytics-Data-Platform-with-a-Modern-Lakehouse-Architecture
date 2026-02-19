@@ -221,8 +221,15 @@ streaming: Real-time Streaming {
     shape: image
   }
 
+  flink: Apache Flink\n(Stream Processing) {
+    icon: https://cdn.simpleicons.org/apacheflink/E6526F
+    shape: image
+  }
+
   connect -> kafka: events
   connect -> schema: avro/json
+  kafka -> flink: login-events
+  flink -> kafka: anomalies\nenriched
   kafka -> redpanda: monitor
 }
 
@@ -345,5 +352,55 @@ analytics.trino -> lakehouse.catalog: catalog metadata {
     stroke: "#999"
     stroke-dash: 3
     font-size: 11
+  }
+}
+# ──────────────────────────────────────────────────
+# Real-time Analytics (ClickHouse)
+# ──────────────────────────────────────────────────
+realtime: Real-time Analytics {
+  style: {
+    fill: "#FFF0F5"
+    stroke: "#FF69B4"
+    border-radius: 12
+    font-size: 18
+    bold: true
+  }
+
+  flashsale: Flash Sale Loadgen\n(Python — High Throughput) {
+    icon: https://cdn.simpleicons.org/python/3776AB
+    shape: image
+  }
+
+  clickhouse: ClickHouse\n(Kafka Engine + MergeTree) {
+    icon: https://cdn.simpleicons.org/clickhouse/FFCC00
+    shape: image
+  }
+
+  streamlit: Streamlit\n(Real-time Dashboard) {
+    icon: https://cdn.simpleicons.org/streamlit/FF4B4B
+    shape: image
+  }
+
+  flashsale -> sources.postgres: Purchases {
+    style: {
+      stroke: "#FF69B4"
+      stroke-dash: 3
+    }
+  }
+
+  streaming.connect -> clickhouse: Kafka Engine (Avro) {
+    style: {
+      stroke: "#FFCC00"
+      stroke-width: 2
+      font-size: 12
+    }
+  }
+
+  clickhouse -> streamlit: Live Queries {
+    style: {
+      stroke: "#FF4B4B"
+      stroke-width: 2
+      font-size: 12
+    }
   }
 }

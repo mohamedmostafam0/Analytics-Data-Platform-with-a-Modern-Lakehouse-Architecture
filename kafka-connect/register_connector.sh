@@ -59,11 +59,13 @@ for CONFIG_FILE in $CONFIG_DIR/*.json; do
     fi
 
     # Register or update the connector
-    echo "Registering connector $CONNECTOR_NAME from $CONFIG_FILE..."
+    # Extract config object using jq
+    echo "Extracting config for $CONNECTOR_NAME..."
+    jq '.config' "$TEMP_CONFIG_FILE" > "$TEMP_CONFIG_FILE.payload"
 
     response=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
       -H "Content-Type: application/json" \
-      -d @"$TEMP_CONFIG_FILE" \
+      -d @"$TEMP_CONFIG_FILE.payload" \
       "http://$CONNECT_HOST:$CONNECT_PORT/connectors/$CONNECTOR_NAME/config")
 
     if [[ "$response" -ge 200 && "$response" -lt 300 ]]; then
@@ -71,16 +73,18 @@ for CONFIG_FILE in $CONFIG_DIR/*.json; do
     else
         echo "Error registering connector $CONNECTOR_NAME. HTTP Status: $response"
         echo "Response body:"
+        cat "$TEMP_CONFIG_FILE.payload"
+        echo ""
         curl -s -X PUT \
           -H "Content-Type: application/json" \
-          -d @"$TEMP_CONFIG_FILE" \
+          -d @"$TEMP_CONFIG_FILE.payload" \
           "http://$CONNECT_HOST:$CONNECT_PORT/connectors/$CONNECTOR_NAME/config"
     fi
     
-    # Cleanup temp file
-    rm -f "$TEMP_CONFIG_FILE"
+    # Cleanup temp files
+    rm -f "$TEMP_CONFIG_FILE" "$TEMP_CONFIG_FILE.payload"
 done
 
 # Verify status of all connectors
 echo "Checking status of all connectors..."
-curl -s "http://$CONNECT_HOST:$CONNECT_PORT/connectors?expand=status" | python3 -m json.tool
+curl -s "http://$CONNECT_HOST:$CONNECT_PORT/connectors?expand=status" | jq .

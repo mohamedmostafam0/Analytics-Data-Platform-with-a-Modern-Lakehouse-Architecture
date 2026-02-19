@@ -1,6 +1,9 @@
 # Analytics Data Platform with a Modern Lakehouse Architecture
 
-![Lakehouse Architecture](docs/architecture.svg)
+![Project Architecture](docs/architecture.svg)
+
+### Data Flow
+![Data Flow](docs/data_flow.svg)
 
 ## 🚀 Overview
 
@@ -26,6 +29,7 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 | :--- | :--- | :--- |
 | **Compute (ETL)** | [Apache Spark](https://spark.apache.org/) 3.5 | Batch data processing and transformations. |
 | **Streaming** | [Apache Kafka](https://kafka.apache.org/) | Event streaming platform. |
+| **Stream Processing** | [Apache Flink](https://flink.apache.org/) 1.17 | Stateful stream processing for anomaly detection. |
 | **CDC** | [Debezium](https://debezium.io/) | Change Data Capture for Postgres. |
 | **Search Engine** | [OpenSearch](https://opensearch.org/) | Distributed search and analytics engine. |
 | **Schema Registry** | [Confluent Schema Registry](https://docs.confluent.io/platform/current/schema-registry/index.html) | Avro schema management. |
@@ -47,7 +51,8 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 ├── .env.example                    # Template for new setups
 ├── docker-compose.yaml             # Core services (Spark, Trino, MinIO, Superset, Postgres)
 ├── airflow.yaml                    # Airflow services (webserver, scheduler, DB, MailHog)
-├── lakehouse-preparer.sh           # End-to-end pipeline orchestration script
+├── scripts/                        # Utility scripts
+│   └── lakehouse-preparer.sh       # End-to-end pipeline orchestrator
 ├── README.md
 │
 ├── airflow/                        # Airflow orchestration
@@ -57,10 +62,10 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 │       └── sql/
 │           └── trino.sql           # Gold-layer segmentation query
 │
-├── loadgen/                        # Synthetic data generator
-│   ├── Dockerfile
-│   ├── generate_load.py
-│   └── requirements.txt
+├── load-generators/                # Data Generators
+│   ├── sys-load/                   # System Load (CPU/Memory)
+│   ├── items-load/                 # Product Seeder
+│   └── flashsale-load/             # Crash simulation
 │
 ├── postgres/                       # Postgres initialization
 │   └── postgres_bootstrap.sql
@@ -70,6 +75,12 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 │   ├── connector.json              # Debezium Source Config
 │   ├── opensearch-sink.json        # OpenSearch Sink Config
 │   └── register_connector.sh
+│
+├── flink/                          # Flink Resources
+│   ├── sql/                        # Flink SQL Jobs
+│   │   ├── create-tables.sql
+│   │   └── insert-jobs.sql
+│   └── lib/                        # Connectors (JARs)
 │
 ├── spark/                          # Spark image & ETL scripts
 │   ├── Dockerfile
@@ -134,8 +145,8 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
     docker compose run loadgen
 
     # Run full pipeline (schemas → ingest → transform)
-    chmod +x lakehouse-preparer.sh
-    ./lakehouse-preparer.sh
+    chmod +x scripts/lakehouse-preparer.sh
+    ./scripts/lakehouse-preparer.sh
     ```
 
 ## 🖥️ Services
@@ -182,6 +193,12 @@ Sources                    Bronze              Silver                Gold
 │ Postgres │──CDC─▶ Kafka Topic │──Sink─▶ OpenSearch │──API─▶ Architecture │
 │ (Items)  │      │ (Avro)     │      │ (Items)    │      │ Diagram / UI │
 └──────────┘      └────────────┘      └──────────────┘      └──────────────┘
+                               │
+                               │
+                          ┌─────────┐      ┌───────────────┐
+                          │  Flink  │──SQL─▶ Login Anomalies│
+                          │ (SQL)   │      │ (Kafka Topic) │
+                          └─────────┘      └───────────────┘
 ```
 
 ### Running Individual Steps

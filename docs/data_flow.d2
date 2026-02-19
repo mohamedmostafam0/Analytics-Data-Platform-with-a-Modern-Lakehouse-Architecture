@@ -1,0 +1,186 @@
+direction: right
+
+title: |md
+  # Analytics Platform Data Flow
+| {
+  near: top-center
+  style: {
+    font-size: 28
+    bold: true
+  }
+}
+
+# ──────────────────────────────────────────────────
+# Layers & Systems
+# ──────────────────────────────────────────────────
+sources: Data Sources {
+  style: {
+    fill: "#F0F4FF"
+    stroke: "#4A6FA5"
+    border-radius: 12
+    font-size: 16
+    bold: true
+  }
+  
+  postgres_source: PostgreSQL (OLTP)\n(Users, Items, Purchases) {
+    icon: https://icons.terrastruct.com/dev%2Fpostgresql.svg
+    shape: cylinder
+  }
+
+  minio_source: MinIO Raw\n(Pageview Logs) {
+    icon: https://cdn.simpleicons.org/minio/C72E49
+    shape: cylinder
+  }
+
+  loadgen: Load Generators\n(Python) {
+    icon: https://cdn.simpleicons.org/python/3776AB
+    shape: rectangle
+  }
+}
+
+ingestion: Ingestion & Streaming {
+  style: {
+    fill: "#E6F3FF"
+    stroke: "#2196F3"
+    border-radius: 12
+    font-size: 16
+    bold: true
+  }
+
+  details: {
+    kafka: Apache Kafka\n(Event Bus) {
+      icon: https://cdn.simpleicons.org/apachekafka/231F20
+      shape: queue
+    }
+
+    connect: Kafka Connect\n(Debezium CDC) {
+      icon: https://cdn.simpleicons.org/apachekafka/231F20
+      shape: rectangle
+    }
+
+    flink: Apache Flink\n(Stream Processing) {
+      icon: https://cdn.simpleicons.org/apacheflink/E6526F
+      shape: rectangle
+    }
+
+    schema_registry: Schema Registry {
+      icon: https://avatars.githubusercontent.com/u/10534221?s=200&v=4
+      shape: hexagon
+    }
+  }
+}
+
+storage: Lakehouse Storage {
+  style: {
+    fill: "#FFF8E7"
+    stroke: "#D4A843"
+    border-radius: 12
+    font-size: 16
+    bold: true
+  }
+
+  bronze: Bronze Layer\n(Raw - Iceberg) {
+    style: {stroke: "#CD7F32"}
+  }
+  silver: Silver Layer\n(Cleaned - Iceberg) {
+    style: {stroke: "#C0C0C0"}
+  }
+  gold: Gold Layer\n(Aggregated - Iceberg) {
+    style: {stroke: "#FFD700"}
+  }
+}
+
+processing: Batch Processing {
+  style: {
+    fill: "#F0FFF0"
+    stroke: "#4CAF50"
+    border-radius: 12
+    font-size: 16
+    bold: true
+  }
+
+  spark: Apache Spark\n(ETL Jobs) {
+    icon: https://cdn.simpleicons.org/apachespark/E25A1C
+    shape: rectangle
+  }
+  
+  airflow: Apache Airflow\n(Orchestrator) {
+    icon: https://cdn.simpleicons.org/apacheairflow/017CEE
+    shape: rectangle
+  }
+}
+
+serving: Serving & Analytics {
+  style: {
+    fill: "#F8F0FF"
+    stroke: "#7B68EE"
+    border-radius: 12
+    font-size: 16
+    bold: true
+  }
+
+  clickhouse: ClickHouse\n(Real-time OLAP) {
+    icon: https://cdn.simpleicons.org/clickhouse/FFCC00
+    shape: cylinder
+  }
+
+  trino: Trino\n(Federated SQL) {
+    icon: https://cdn.simpleicons.org/trino/DD00A1
+    shape: rectangle
+  }
+
+  streamlit: Streamlit\n(Real-time Dash) {
+    icon: https://cdn.simpleicons.org/streamlit/FF4B4B
+    shape: image
+  }
+
+  superset: Superset\n(BI Dashboards) {
+    icon: https://cdn.simpleicons.org/apachesuperset/20A6C9
+    shape: image
+  }
+  
+  opensearch: OpenSearch\n(Log Search) {
+    icon: https://avatars.githubusercontent.com/u/83810493?s=200&v=4
+    shape: cylinder
+  }
+}
+
+# ──────────────────────────────────────────────────
+# Connections
+# ──────────────────────────────────────────────────
+
+# 1. Data Generation
+sources.loadgen -> sources.postgres_source: Transactions
+sources.loadgen -> sources.minio_source: Logs (JSON)
+sources.loadgen -> ingestion.details.kafka: Login Events
+
+# 2. Ingestion (CDC & Streaming)
+sources.postgres_source -> ingestion.details.connect: WAL (CDC)
+ingestion.details.connect -> ingestion.details.kafka: Change Events
+ingestion.details.connect -> ingestion.details.schema_registry: Register Schemas
+
+# 3. Stream Processing (Flink)
+ingestion.details.kafka -> ingestion.details.flink: Read Login Events
+ingestion.details.flink -> ingestion.details.kafka: Write Anomalies\n& Enriched Events
+
+# 4. Real-time Serving
+ingestion.details.kafka -> serving.clickhouse: Ingest (Kafka Engine)
+ingestion.details.connect -> serving.opensearch: Sync Items
+serving.clickhouse -> serving.streamlit: Live Metrics
+
+# 5. Batch ETL (Spark)
+sources.minio_source -> processing.spark: Read Raw JSON
+sources.postgres_source -> processing.spark: Read Table Snapshots
+processing.spark -> storage.bronze: Write
+storage.bronze -> processing.spark: Read
+processing.spark -> storage.silver: Transform
+storage.silver -> processing.spark: Read
+processing.spark -> storage.gold: Aggregate
+
+# 6. Analytics Serving (Trino)
+storage.gold -> serving.trino: Query Iceberg
+serving.trino -> serving.superset: Visualizations
+
+# 7. Orchestration
+processing.airflow -> processing.spark: Trigger Jobs
+processing.airflow -> serving.trino: Run DQ Checks

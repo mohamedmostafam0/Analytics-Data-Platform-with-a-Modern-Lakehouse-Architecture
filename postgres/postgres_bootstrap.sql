@@ -34,14 +34,19 @@ create table if not exists items(
     updated_at timestamp default current_timestamp
 );
 
-create table if not exists purchases(
-    id serial primary key, 
-    user_id bigint references users(id), 
-    item_id bigint references items(id), 
-    quantity int default 1, 
-    purchase_price decimal(12,2), 
-    created_at timestamp default current_timestamp,
-    updated_at timestamp default current_timestamp
+
+CREATE TABLE IF NOT EXISTS purchases
+(
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id),
+    item_id BIGINT REFERENCES items(id),
+    campaign_id VARCHAR(50),
+    status SMALLINT DEFAULT 1,
+    quantity INT DEFAULT 1,
+    purchase_price DECIMAL(12,2),
+    deleted BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 grant select on table users to readonly; 
