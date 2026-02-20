@@ -436,8 +436,17 @@ services:
     command: jobmanager
     volumes:
       - ./flink/sql:/opt/flink/flink-sql
-      - ./flink/lib/flink-sql-connector-kafka-1.17.2.jar:/opt/flink/lib/flink-sql-connector-kafka-1.17.2.jar
       - ./ip_geo.csv:/opt/flink/ip_geo.csv
+      - ./flink/lib/guava-30.1.1-jre.jar:/opt/flink/lib/guava-30.1.1-jre.jar
+      - ./flink/lib/avro-1.11.3.jar:/opt/flink/lib/avro-1.11.3.jar
+      - ./flink/lib/flink-avro-1.17.2.jar:/opt/flink/lib/flink-avro-1.17.2.jar
+      - ./flink/lib/flink-avro-confluent-registry-1.17.2.jar:/opt/flink/lib/flink-avro-confluent-registry-1.17.2.jar
+      - ./flink/lib/flink-sql-connector-kafka-1.17.2.jar:/opt/flink/lib/flink-sql-connector-kafka-1.17.2.jar
+      - ./flink/lib/jackson-annotations-2.14.2.jar:/opt/flink/lib/jackson-annotations-2.14.2.jar
+      - ./flink/lib/jackson-core-2.14.2.jar:/opt/flink/lib/jackson-core-2.14.2.jar
+      - ./flink/lib/jackson-databind-2.14.2.jar:/opt/flink/lib/jackson-databind-2.14.2.jar
+      - ./flink/lib/kafka-clients-3.2.3.jar:/opt/flink/lib/kafka-clients-3.2.3.jar
+      - ./flink/lib/kafka-schema-registry-client-7.3.0.jar:/opt/flink/lib/kafka-schema-registry-client-7.3.0.jar
     environment:
       - |
         FLINK_PROPERTIES=
@@ -460,8 +469,17 @@ services:
     command: taskmanager
     scale: 1
     volumes:
-      - ./flink/lib/flink-sql-connector-kafka-1.17.2.jar:/opt/flink/lib/flink-sql-connector-kafka-1.17.2.jar
       - ./ip_geo.csv:/opt/flink/ip_geo.csv
+      - ./flink/lib/guava-30.1.1-jre.jar:/opt/flink/lib/guava-30.1.1-jre.jar
+      - ./flink/lib/avro-1.11.3.jar:/opt/flink/lib/avro-1.11.3.jar
+      - ./flink/lib/flink-avro-1.17.2.jar:/opt/flink/lib/flink-avro-1.17.2.jar
+      - ./flink/lib/flink-avro-confluent-registry-1.17.2.jar:/opt/flink/lib/flink-avro-confluent-registry-1.17.2.jar
+      - ./flink/lib/flink-sql-connector-kafka-1.17.2.jar:/opt/flink/lib/flink-sql-connector-kafka-1.17.2.jar
+      - ./flink/lib/jackson-annotations-2.14.2.jar:/opt/flink/lib/jackson-annotations-2.14.2.jar
+      - ./flink/lib/jackson-core-2.14.2.jar:/opt/flink/lib/jackson-core-2.14.2.jar
+      - ./flink/lib/jackson-databind-2.14.2.jar:/opt/flink/lib/jackson-databind-2.14.2.jar
+      - ./flink/lib/kafka-clients-3.2.3.jar:/opt/flink/lib/kafka-clients-3.2.3.jar
+      - ./flink/lib/kafka-schema-registry-client-7.3.0.jar:/opt/flink/lib/kafka-schema-registry-client-7.3.0.jar
     environment:
       - |
         FLINK_PROPERTIES=

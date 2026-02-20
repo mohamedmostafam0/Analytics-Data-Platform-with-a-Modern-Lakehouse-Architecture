@@ -16,3 +16,4 @@ spark-warehouse/
 airflow/db
 # Secrets
 trino/etc/catalog/iceberg.properties
+flink/lib/*.jar

@@ -1,12 +1,13 @@
 -- Source table: login events
 CREATE TABLE IF NOT EXISTS login_events (
-  user_id STRING,
-  `timestamp` TIMESTAMP(3),
-  ip STRING,
-  device STRING,
-  platform STRING,
-  user_agent STRING,
-  WATERMARK FOR `timestamp` AS `timestamp` - INTERVAL '5' SECOND
+  user_id STRING NOT NULL,
+  `timestamp` STRING NOT NULL,
+  ip STRING NOT NULL,
+  device STRING NOT NULL,
+  platform STRING NOT NULL,
+  user_agent STRING NOT NULL,
+  ts_ltz AS TO_TIMESTAMP(REPLACE(REPLACE(`timestamp`, 'T', ' '), 'Z', '')),
+  WATERMARK FOR ts_ltz AS ts_ltz - INTERVAL '5' SECOND
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'login-events',

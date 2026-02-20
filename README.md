@@ -247,9 +247,22 @@ docker exec spark-iceberg pytest /home/iceberg/scripts/tests/
 ### Airflow DAG Graph
 ![Airflow DAG](docs/screenshots/airflow-dag-graph.png)
 
+### Streamlit Real-Time Dashboard
+<!-- TODO: Add screenshot of real-time ClickHouse metrics at http://localhost:8501 -->
+![Streamlit Dashboard](docs/screenshots/streamlit-dashboard.png)
+
+### Kafka Topics in Redpanda Console 
+<!-- TODO: Add screenshot of Avro schemas or Topic UI at http://localhost:8084 -->
+![Redpanda Console](docs/screenshots/redpanda-console.png)
+
+### Flink Pipeline Topology
+![Flink Topology - Login Events Enriched](docs/screenshots/login_events_enriched_flink.png)
+
+![Flink Topology - Login Anomalies](docs/screenshots/login_anomalies_flink.png)
+
 ### Spark UI
 <!-- TODO: Add screenshot of Spark UI showing completed ETL jobs -->
-<!-- ![Spark UI](screenshots/spark-ui.png) -->
+<!-- ![Spark UI](docs/screenshots/spark-ui.png) -->
 
 ---
 

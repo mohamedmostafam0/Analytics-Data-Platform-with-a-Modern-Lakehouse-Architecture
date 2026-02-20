@@ -1,13 +1,12 @@
--- Statement Sets combine multiple INSERT statements into a single Flink job graph,
--- which optimization phases use to share source reads and operators.
-EXECUTE STATEMENT SET
-BEGIN
+-- Set optimizer configs to automatically share sources and sub-plans
+SET 'table.optimizer.reuse-source-enabled' = 'true';
+SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
 
 -- 1. Enrichment + classification job
 INSERT INTO login_events_enriched
 SELECT
   user_id,
-  `timestamp`,
+  ts_ltz AS `timestamp`,
   ip,
   platform,
   CASE
@@ -32,7 +31,5 @@ FROM login_events_enriched e
 LEFT JOIN login_events_enriched recent
   ON e.user_id = recent.user_id
   AND e.country = recent.country
-  AND recent.`timestamp` BETWEEN e.`timestamp` - INTERVAL '7' DAY AND e.`timestamp` - INTERVAL '1' SECOND
+  AND recent.`timestamp` BETWEEN e.`timest  amp` - INTERVAL '7' DAY AND e.`timestamp` - INTERVAL '1' SECOND
 WHERE recent.user_id IS NULL;
-
-END;
