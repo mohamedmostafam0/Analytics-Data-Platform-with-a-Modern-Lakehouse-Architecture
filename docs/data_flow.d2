@@ -32,7 +32,12 @@ sources: Data Sources {
     shape: cylinder
   }
 
-  loadgen: Load Generators\n(Python) {
+  loadgen: E-Commerce Load Generators\n(Python) {
+    icon: https://cdn.simpleicons.org/python/3776AB
+    shape: rectangle
+  }
+
+  login_loadgen: Login Simulator\n(Python · Avro) {
     icon: https://cdn.simpleicons.org/python/3776AB
     shape: rectangle
   }
@@ -152,16 +157,18 @@ serving: Serving & Analytics {
 # 1. Data Generation
 sources.loadgen -> sources.postgres_source: Transactions
 sources.loadgen -> sources.minio_source: Logs (JSON)
-sources.loadgen -> ingestion.details.kafka: Login Events
+sources.login_loadgen -> ingestion.details.schema_registry: Negotiate Schema
+sources.login_loadgen -> ingestion.details.kafka: Login Events (Avro)
 
 # 2. Ingestion (CDC & Streaming)
 sources.postgres_source -> ingestion.details.connect: WAL (CDC)
-ingestion.details.connect -> ingestion.details.kafka: Change Events
+ingestion.details.connect -> ingestion.details.kafka: Change Events (Avro)
 ingestion.details.connect -> ingestion.details.schema_registry: Register Schemas
 
 # 3. Stream Processing (Flink)
-ingestion.details.kafka -> ingestion.details.flink: Read Login Events
-ingestion.details.flink -> ingestion.details.kafka: Write Anomalies\n& Enriched Events
+ingestion.details.kafka -> ingestion.details.flink: Read Login Events (Avro)
+ingestion.details.schema_registry -> ingestion.details.flink: Deserialize Avro
+ingestion.details.flink -> ingestion.details.kafka: Write Anomalies\n& Enriched Events (JSON)
 
 # 4. Real-time Serving
 ingestion.details.kafka -> serving.clickhouse: Ingest (Kafka Engine)

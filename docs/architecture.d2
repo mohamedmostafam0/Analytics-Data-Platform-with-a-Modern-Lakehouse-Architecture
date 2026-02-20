@@ -32,7 +32,12 @@ sources: Data Sources {
     shape: image
   }
 
-  loadgen: Load Generator\n(Python — E-commerce simulator) {
+  loadgen: E-Commerce Load Generator\n(Python — Purchases/Views) {
+    icon: https://cdn.simpleicons.org/python/3776AB
+    shape: image
+  }
+
+  login_loadgen: Login Simulator\n(Python — Avro Events) {
     icon: https://cdn.simpleicons.org/python/3776AB
     shape: image
   }
@@ -227,9 +232,12 @@ streaming: Real-time Streaming {
   }
 
   connect -> kafka: events
-  connect -> schema: avro/json
-  kafka -> flink: login-events
-  flink -> kafka: anomalies\nenriched
+  connect -> schema: push schema
+
+  sources.login_loadgen -> schema: retrieve schema
+  sources.login_loadgen -> kafka: login-events (Avro)
+  kafka -> flink: parse Avro
+  flink -> kafka: anomalies\nenriched (JSON)
   kafka -> redpanda: monitor
 }
 

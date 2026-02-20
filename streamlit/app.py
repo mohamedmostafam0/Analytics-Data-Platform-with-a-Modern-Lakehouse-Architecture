@@ -37,9 +37,9 @@ def get_hourly_sales():
         toStartOfHour(created_at) AS hour,
         SUM(quantity) AS total_sales,
         SUM(quantity * purchase_price) as total_revenue
-    FROM oneshop.purchases
+        FROM oneshop.purchases
     WHERE deleted = 0
-      AND created_at >= now() - INTERVAL 24 HOUR
+            AND created_at >= now() - toIntervalHour(24)
     GROUP BY hour
     ORDER BY hour ASC
     """
@@ -120,10 +120,10 @@ col_chart, col_table = st.columns([2, 1])
 
 with col_chart:
     st.subheader("Hourly Sales Trend (Last 24h)")
-    hourly_df = get_hourly_sales()
-    if not hourly_df.empty:
+    hourly_sales_df = get_hourly_sales()
+    if not hourly_sales_df.empty and "hour" in hourly_sales_df.columns:
         fig = px.bar(
-            hourly_df, 
+            hourly_sales_df, 
             x="hour", 
             y="total_sales",
             hover_data=["total_revenue"],
@@ -140,7 +140,7 @@ with col_chart:
 with col_table:
     st.subheader("Top Products")
     top_products_df = get_top_products()
-    if not top_products_df.empty:
+    if not top_products_df.empty and "item_id" in top_products_df.columns:
         st.dataframe(
             top_products_df.style.format({"total_revenue": "${:,.2f}"}),
             use_container_width=True,

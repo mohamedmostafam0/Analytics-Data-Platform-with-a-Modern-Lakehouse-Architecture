@@ -29,10 +29,10 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 | :--- | :--- | :--- |
 | **Compute (ETL)** | [Apache Spark](https://spark.apache.org/) 3.5 | Batch data processing and transformations. |
 | **Streaming** | [Apache Kafka](https://kafka.apache.org/) | Event streaming platform. |
-| **Stream Processing** | [Apache Flink](https://flink.apache.org/) 1.17 | Stateful stream processing for anomaly detection. |
+| **Stream Processing** | [Apache Flink](https://flink.apache.org/) 1.17 | Stateful stream processing and bounded-state anomaly detection. |
 | **CDC** | [Debezium](https://debezium.io/) | Change Data Capture for Postgres. |
 | **Search Engine** | [OpenSearch](https://opensearch.org/) | Distributed search and analytics engine. |
-| **Schema Registry** | [Confluent Schema Registry](https://docs.confluent.io/platform/current/schema-registry/index.html) | Avro schema management. |
+| **Schema Registry** | [Confluent Schema Registry](https://docs.confluent.io/platform/current/schema-registry/index.html) | Strict Avro schema enforcement and management. |
 | **Query Engine** | [Trino](https://trino.io/) | Interactive SQL queries for analytics / BI. |
 | **Table Format** | [Apache Iceberg](https://iceberg.apache.org/) | Open table format for huge analytic datasets. |
 | **Storage** | [MinIO](https://min.io/) | S3-compatible object storage. |
@@ -40,7 +40,7 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 | **Visualization** | [Apache Superset](https://superset.apache.org/) | BI dashboards and data exploration. |
 | **Orchestration** | [Apache Airflow](https://airflow.apache.org/) 2.8 | DAG-based workflow orchestration. |
 | **OLTP Database** | [PostgreSQL](https://www.postgresql.org/) 18 | Source transactional database. |
-| **Data Generator** | Custom Python | Synthetic e-commerce data. |
+| **Data Generator** | Custom Python | Multi-purpose synthetic data generators (E-commerce + Auth streaming). |
 | **Email (Dev)** | [MailHog](https://github.com/mailhog/MailHog) | Local SMTP server for testing email alerts. |
 | **Containerization** | Docker Compose | Local container orchestration. |
 
@@ -65,9 +65,9 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 ├── load-generators/                # Data Generators
 │   ├── sys-load/                   # System Load (CPU/Memory)
 │   ├── items-load/                 # Product Seeder
-│   └── flashsale-load/             # Crash simulation
-│
-├── postgres/                       # Postgres initialization
+│   ├── flashsale-load/             # Crash simulation (Purchases)
+│   ├── login-load/                 # Real-time Auth Event Simulator (Avro)
+│   └── README.md                   # Generator Documentation
 │   └── postgres_bootstrap.sql
 │
 ├── kafka-connect/                  # Streaming Pipeline Configs
@@ -189,16 +189,23 @@ Sources                    Bronze              Silver                Gold
 ### Real-time Streaming Pipeline
 
 ```
-┌──────────┐      ┌────────────┐      ┌────────────┐      ┌──────────────┐
-│ Postgres │──CDC─▶ Kafka Topic │──Sink─▶ OpenSearch │──API─▶ Architecture │
-│ (Items)  │      │ (Avro)     │      │ (Items)    │      │ Diagram / UI │
-└──────────┘      └────────────┘      └──────────────┘      └──────────────┘
+┌──────────┐      ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+│ Postgres │──CDC─▶ Kafka Topic  │──Sink─▶ OpenSearch │──API─▶ Architecture │
+│ (Items)  │      │ (Avro)       │      │ (Items)    │      │ Diagram / UI │
+└──────────┘      └──────────────┘      └──────────────┘      └──────────────┘
                                │
                                │
                           ┌─────────┐      ┌───────────────┐
                           │  Flink  │──SQL─▶ Login Anomalies│
-                          │ (SQL)   │      │ (Kafka Topic) │
+                          │ (SQL)   │      │ (Kafka JSON)  │
                           └─────────┘      └───────────────┘
+                               ▲
+                               │ Avro Login Events
+                               │
+                        ┌──────────────┐      ┌──────────────┐
+                        │ Login Loadgen│──Avro─▶ Schema      │
+                        │ (Simulator)  │      │  Registry    │
+                        └──────────────┘      └──────────────┘
 ```
 
 ### Running Individual Steps

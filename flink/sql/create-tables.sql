@@ -11,9 +11,9 @@ CREATE TABLE IF NOT EXISTS login_events (
   'connector' = 'kafka',
   'topic' = 'login-events',
   'properties.bootstrap.servers' = 'kafka:9092',
-  'format' = 'json',
-  'scan.startup.mode' = 'earliest-offset',
-  'json.timestamp-format.standard' = 'ISO-8601'
+  'format' = 'avro-confluent',
+  'avro-confluent.url' = 'http://schema-registry:8081',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 -- Static Geo enrichment table
