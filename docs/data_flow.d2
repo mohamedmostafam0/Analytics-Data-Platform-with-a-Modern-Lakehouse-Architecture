@@ -41,6 +41,11 @@ sources: Data Sources {
     icon: https://cdn.simpleicons.org/python/3776AB
     shape: rectangle
   }
+
+  embedding_loadgen: Embedding Gen\n(Python · pgvector) {
+    icon: https://cdn.simpleicons.org/python/3776AB
+    shape: rectangle
+  }
 }
 
 ingestion: Ingestion & Streaming {
@@ -159,6 +164,7 @@ sources.loadgen -> sources.postgres_source: Transactions
 sources.loadgen -> sources.minio_source: Logs (JSON)
 sources.login_loadgen -> ingestion.details.schema_registry: Negotiate Schema
 sources.login_loadgen -> ingestion.details.kafka: Login Events (Avro)
+sources.embedding_loadgen -> sources.postgres_source: Review Embeddings
 
 # 2. Ingestion (CDC & Streaming)
 sources.postgres_source -> ingestion.details.connect: WAL (CDC)
@@ -174,6 +180,7 @@ ingestion.details.flink -> ingestion.details.kafka: Write Anomalies\n& Enriched 
 ingestion.details.kafka -> serving.clickhouse: Ingest (Kafka Engine)
 ingestion.details.connect -> serving.opensearch: Sync Items
 serving.clickhouse -> serving.streamlit: Live Metrics
+serving.streamlit -> sources.postgres_source: Semantic Search (pgvector)
 
 # 5. Batch ETL (Spark)
 sources.minio_source -> processing.spark: Read Raw JSON

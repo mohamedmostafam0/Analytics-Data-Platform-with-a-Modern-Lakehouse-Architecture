@@ -22,7 +22,7 @@ sources: Data Sources {
     bold: true
   }
 
-  postgres: PostgreSQL 18\n(OLTP — oneshop)\n(Users, Items, Purchases) {
+  postgres: PostgreSQL 18\n(OLTP — oneshop)\n(Users, Items, Purchases)\n+ pgvector (Embeddings) {
     icon: https://icons.terrastruct.com/dev%2Fpostgresql.svg
     shape: image
   }
@@ -49,6 +49,18 @@ sources: Data Sources {
     }
   }
   loadgen -> minio_raw: Pageview\nJSON {
+    style: {
+      stroke: "#666"
+      stroke-dash: 3
+    }
+  }
+
+  embedding_loadgen: Embedding Generator\n(Python — pgvector) {
+    icon: https://cdn.simpleicons.org/python/3776AB
+    shape: image
+  }
+
+  embedding_loadgen -> postgres: Review\nEmbeddings {
     style: {
       stroke: "#666"
       stroke-dash: 3
@@ -404,11 +416,20 @@ realtime: Real-time Analytics {
     }
   }
 
-  clickhouse -> streamlit: Live Queries {
+  clickhouse -> streamlit: Live Analytics Queries {
     style: {
       stroke: "#FF4B4B"
       stroke-width: 2
       font-size: 12
+    }
+  }
+
+  streamlit -> sources.postgres: Semantic Search (pgvector) {
+    style: {
+      stroke: "#4A6FA5"
+      stroke-width: 2
+      font-size: 12
+      stroke-dash: 5
     }
   }
 }

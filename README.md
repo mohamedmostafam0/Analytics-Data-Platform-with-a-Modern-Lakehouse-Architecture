@@ -30,14 +30,16 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 | **Compute (ETL)** | [Apache Spark](https://spark.apache.org/) 3.5 | Batch data processing and transformations. |
 | **Streaming** | [Apache Kafka](https://kafka.apache.org/) | Event streaming platform. |
 | **Stream Processing** | [Apache Flink](https://flink.apache.org/) 1.17 | Stateful stream processing and bounded-state anomaly detection. |
+| **Real-Time Analytics** | [ClickHouse](https://clickhouse.com/) | High-performance columnar database for real-time dashboards. |
 | **CDC** | [Debezium](https://debezium.io/) | Change Data Capture for Postgres. |
 | **Search Engine** | [OpenSearch](https://opensearch.org/) | Distributed search and analytics engine. |
+| **Vector DB / Semantic Search**| [pgvector](https://github.com/pgvector/pgvector) | Vector similarity search in PostgreSQL. |
 | **Schema Registry** | [Confluent Schema Registry](https://docs.confluent.io/platform/current/schema-registry/index.html) | Strict Avro schema enforcement and management. |
 | **Query Engine** | [Trino](https://trino.io/) | Interactive SQL queries for analytics / BI. |
 | **Table Format** | [Apache Iceberg](https://iceberg.apache.org/) | Open table format for huge analytic datasets. |
 | **Storage** | [MinIO](https://min.io/) | S3-compatible object storage. |
 | **Catalog** | Iceberg REST | Centralized metadata catalog. |
-| **Visualization** | [Apache Superset](https://superset.apache.org/) | BI dashboards and data exploration. |
+| **Visualization** | [Apache Superset](https://superset.apache.org/) & [Streamlit](https://streamlit.io/) | BI dashboards and data exploration. |
 | **Orchestration** | [Apache Airflow](https://airflow.apache.org/) 2.8 | DAG-based workflow orchestration. |
 | **OLTP Database** | [PostgreSQL](https://www.postgresql.org/) 18 | Source transactional database. |
 | **Data Generator** | Custom Python | Multi-purpose synthetic data generators (E-commerce + Auth streaming). |
@@ -103,6 +105,13 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 │   ├── Dockerfile
 │   └── init_connections.py         # Auto-creates Trino database connection
 │
+├── streamlit/                      # Streamlit Real-Time Dashboard
+│   ├── app.py                      # Main Flash Sale analytics
+│   ├── pages/
+│   │   └── Review_Search.py        # Semantic Search with pgvector
+│   ├── Dockerfile
+│   └── requirements.txt
+│
 └── trino/                          # Trino catalog config
     └── etc/catalog/
         └── iceberg.properties
@@ -153,6 +162,7 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 
 | Service | URL | Credentials |
 | :--- | :--- | :--- |
+| **Streamlit Dashboard** | [http://localhost:8501](http://localhost:8501) | — |
 | **Superset** | [http://localhost:8088](http://localhost:8088) | `admin` / `admin` |
 | **Airflow** | [http://localhost:8085](http://localhost:8085) | `admin` / `admin` |
 | **MailHog** | [http://localhost:8025](http://localhost:8025) | — |
@@ -163,6 +173,7 @@ The platform follows the **Medallion Architecture** (Bronze → Silver → Gold)
 | **Redpanda Console** | [http://localhost:8084](http://localhost:8084) | — |
 | **Schema Registry** | [http://localhost:8081](http://localhost:8081) | — |
 | **OpenSearch** | [http://localhost:9200](http://localhost:9200) | — |
+| **ClickHouse** | `localhost:8123` | See `.env` |
 | **Spark UI** | [http://localhost:8080](http://localhost:8080) | — |
 | **PostgreSQL** | `localhost:5432` | See `.env` |
 
@@ -212,22 +223,22 @@ Sources                    Bronze              Silver                Gold
 
 ```bash
 # 1. Generate data
-docker-compose run loadgen
+docker compose run loadgen
 
 # 2. Create schemas
-docker-compose exec spark-iceberg /opt/spark/bin/spark-sql -f /home/iceberg/scripts/sql/bronze_schema.sql
-docker-compose exec spark-iceberg /opt/spark/bin/spark-sql -f /home/iceberg/scripts/sql/silver_schema.sql
-docker-compose exec spark-iceberg /opt/spark/bin/spark-sql -f /home/iceberg/scripts/sql/gold_schema.sql
+docker compose exec spark-iceberg /opt/spark/bin/spark-sql -f /home/iceberg/scripts/sql/bronze_schema.sql
+docker compose exec spark-iceberg /opt/spark/bin/spark-sql -f /home/iceberg/scripts/sql/silver_schema.sql
+docker compose exec spark-iceberg /opt/spark/bin/spark-sql -f /home/iceberg/scripts/sql/gold_schema.sql
 
 # 3. Ingest to Bronze
-docker-compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/minio_loader.py
-docker-compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/postgres_loader.py
+docker compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/minio_loader.py
+docker compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/postgres_loader.py
 
 # 4. Transform Bronze → Silver
-docker-compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/bronze_to_silver_transformer.py
+docker compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/bronze_to_silver_transformer.py
 
 # 5. Transform Silver → Gold
-docker-compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/silver_to_gold_transformer.py
+docker compose exec spark-iceberg /opt/spark/bin/spark-submit /home/iceberg/scripts/silver_to_gold_transformer.py
 ```
 
 ### 🧪 Running Tests

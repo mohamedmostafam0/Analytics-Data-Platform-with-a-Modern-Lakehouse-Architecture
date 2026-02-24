@@ -230,7 +230,7 @@ services:
 
 
   postgres:
-    image: postgres:18
+    image: pgvector/pgvector:pg18
     hostname: postgres
     container_name: postgres
     networks:
@@ -423,7 +423,20 @@ services:
     ports:
       - "8501:8501"
     depends_on:
-      - clickhouse
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - ./streamlit:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       iceberg_net:
 

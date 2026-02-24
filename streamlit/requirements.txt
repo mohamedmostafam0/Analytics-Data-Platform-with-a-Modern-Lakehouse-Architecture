@@ -2,3 +2,6 @@ streamlit
 pandas
 plotly
 clickhouse-connect
+psycopg2-binary
+sentence-transformers
+torch

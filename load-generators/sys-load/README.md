@@ -27,7 +27,7 @@ The following environment variables can be set in the root `.env` file:
 Run via Docker Compose:
 
 ```bash
-docker-compose run loadgen
+docker compose run loadgen
 ```
 
 This will run the script once and exit. You can run it multiple times to generate more data.

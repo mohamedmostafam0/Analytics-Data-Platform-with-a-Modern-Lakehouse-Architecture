@@ -9,6 +9,7 @@ This directory contains the configuration and automation scripts for the Real-ti
 | `Dockerfile` | Custom Connect image with Debezium 3.0 and Confluent Avro Converters. |
 | `connector.json` | Debezium Postgres Source Connector configuration. |
 | `opensearch-sink.json` | OpenSearch Sink Connector configuration. |
+| `purchases-connector.json` | Debezium Postgres Source Connector configuration for the \`purchases\` table. |
 | `register_connector.sh` | Script to automatically register all `.json` connectors in this directory. |
 
 ## 🚀 Connectors
@@ -23,6 +24,12 @@ Stream changes from the `public.items` table in Postgres to the `dbz.public.item
 Reads from `dbz.public.items` and writes to OpenSearch `items` index.
 -   **Strategy**: "Soft Delete" (ignores tombstones, keeps records with `__deleted: true`).
 -   **Format**: Avro (via Schema Registry).
+
+### 3. Postgres Purchases Source (`purchases-connector.json`)
+Stream changes from the `public.purchases` table in Postgres to the `dbz_purchases.public.purchases` Kafka topic.
+-   **Plugin**: `pgoutput` (Logical Replication)
+-   **Format**: Avro (via Schema Registry)
+-   **Transforms**: `ExtractNewRecordState` (flattens complex Debezium envelope to raw row data)
 
 ## 🛠️ Usage
 
