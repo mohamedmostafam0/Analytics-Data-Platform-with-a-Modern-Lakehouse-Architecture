@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lakehouse-platform
+  labels:
+    app.kubernetes.io/name: lakehouse-platform
+    app.kubernetes.io/instance: lakehouse-platform
+    app.kubernetes.io/version: phase-2
+    app.kubernetes.io/component: platform-foundation
+    app.kubernetes.io/part-of: lakehouse-platform
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    platform.lakehouse/source-repository: https://github.com/mohamedmostafam0/Analytics-Data-Platform-with-a-Modern-Lakehouse-Architecture
+    platform.lakehouse/documentation: docs/plans/kubernetes-migration.md
+    platform.lakehouse/owner: data-platform

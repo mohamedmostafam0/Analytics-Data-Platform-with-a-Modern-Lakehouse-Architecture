@@ -1,0 +1,4 @@
+# Architecture-only target profile. It remains workload-free in Phase 2 and is
+# unsuitable for normal laptop use after later components are implemented.
+global:
+  profile: full

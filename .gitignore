@@ -1,19 +1,66 @@
+# Local environment and credentials
 .env
-loadgen/.env
+.env.*
+!.env.example
+!.env.*.example
+.envrc
+.direnv/
+**/*.secret.yaml
+**/*.secret.yml
+**/secrets.local.yaml
+**/secrets.local.yml
+**/values.local.yaml
+**/values-*.local.yaml
+trino/etc/catalog/iceberg.properties
+
+# Python caches, environments, test output, and packaging
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.venv/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Jupyter, editors, and operating-system metadata
 .ipynb_checkpoints/
 .idea/
 .vscode/
-*.log
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
 
-# Data Directories
+# Logs and transient process files
+*.log
+*.pid
+*.tmp
+
+# Kubernetes and Helm local artifacts
+kubeconfig
+kubeconfig.*
+*.kubeconfig
+infrastructure/.tools/
+infrastructure/**/rendered/
+infrastructure/helm/**/charts/
+*.tgz
+
+# Runtime data and downloaded dependencies
 warehouse/
 superset/superset_home/
 superset/superset_db_data/
 metastore_db/
 spark-warehouse/
-airflow/db
-# Secrets
-trino/etc/catalog/iceberg.properties
+airflow/db/
 flink/lib/*.jar

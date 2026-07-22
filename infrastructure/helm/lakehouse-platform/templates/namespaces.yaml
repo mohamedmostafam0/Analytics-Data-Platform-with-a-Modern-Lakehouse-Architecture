@@ -1,0 +1,22 @@
+{{- if .Values.namespace.create }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace.name | quote }}
+  labels:
+    {{- include "lakehouse-platform.labels" . | nindent 4 }}
+    {{- with .Values.namespace.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    platform.lakehouse/source-repository: {{ .Values.global.sourceRepository | quote }}
+    platform.lakehouse/documentation: "docs/plans/kubernetes-migration.md"
+    platform.lakehouse/owner: "data-platform"
+    platform.lakehouse/profile: {{ .Values.global.profile | quote }}
+    {{- with .Values.global.gitCommit }}
+    platform.lakehouse/git-commit: {{ . | quote }}
+    {{- end }}
+    {{- with .Values.namespace.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

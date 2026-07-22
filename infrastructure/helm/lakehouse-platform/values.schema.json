@@ -1,0 +1,162 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Lakehouse platform values",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["global", "namespace", "features", "components"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment", "profile", "sourceRepository", "gitCommit"],
+      "properties": {
+        "environment": {"type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]*$"},
+        "profile": {"type": "string", "enum": ["minimal", "ingestion", "streaming", "batch", "analytics", "observability", "logging", "full"]},
+        "sourceRepository": {"type": "string", "minLength": 1},
+        "gitCommit": {"type": "string", "pattern": "^$|^[0-9a-fA-F]{7,64}$"}
+      }
+    },
+    "namespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["create", "name", "labels", "annotations"],
+      "properties": {
+        "create": {"type": "boolean"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+        "labels": {"type": "object", "additionalProperties": {"type": "string"}},
+        "annotations": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["postgresql", "sourcePostgresql", "cdcPostgresql", "itemsLoadGenerator", "systemLoadGenerator", "flashSaleLoadGenerator", "minio", "minioClient", "icebergRest", "spark", "trino", "kafka", "kafkaSetup", "schemaRegistry", "kafkaConnect", "connectorSetup", "loginLoadGenerator", "redpandaConsole", "flink", "clickhouse", "openSearch", "streamlit", "superset", "airflow", "mailhog"],
+      "properties": {
+        "postgresql": {"$ref": "#/definitions/featureToggle"},
+        "sourcePostgresql": {"$ref": "#/definitions/featureToggle"},
+        "cdcPostgresql": {"$ref": "#/definitions/featureToggle"},
+        "itemsLoadGenerator": {"$ref": "#/definitions/featureToggle"},
+        "systemLoadGenerator": {"$ref": "#/definitions/featureToggle"},
+        "flashSaleLoadGenerator": {"$ref": "#/definitions/featureToggle"},
+        "minio": {"$ref": "#/definitions/featureToggle"},
+        "minioClient": {"$ref": "#/definitions/featureToggle"},
+        "icebergRest": {"$ref": "#/definitions/featureToggle"},
+        "spark": {"$ref": "#/definitions/featureToggle"},
+        "trino": {"$ref": "#/definitions/featureToggle"},
+        "kafka": {"$ref": "#/definitions/featureToggle"},
+        "kafkaSetup": {"$ref": "#/definitions/featureToggle"},
+        "schemaRegistry": {"$ref": "#/definitions/featureToggle"},
+        "kafkaConnect": {"$ref": "#/definitions/featureToggle"},
+        "connectorSetup": {"$ref": "#/definitions/featureToggle"},
+        "loginLoadGenerator": {"$ref": "#/definitions/featureToggle"},
+        "redpandaConsole": {"$ref": "#/definitions/featureToggle"},
+        "flink": {"$ref": "#/definitions/featureToggle"},
+        "clickhouse": {"$ref": "#/definitions/featureToggle"},
+        "openSearch": {"$ref": "#/definitions/featureToggle"},
+        "streamlit": {"$ref": "#/definitions/featureToggle"},
+        "superset": {"$ref": "#/definitions/featureToggle"},
+        "airflow": {"$ref": "#/definitions/featureToggle"},
+        "mailhog": {"$ref": "#/definitions/featureToggle"}
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourcePostgresql", "itemsLoadGenerator"],
+      "properties": {
+        "sourcePostgresql": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["clusterName", "operatorNamespace", "imageName", "imagePullPolicy", "instances", "database", "owner", "credentialsSecret", "storage", "resources"],
+          "properties": {
+            "clusterName": {"$ref": "#/definitions/kubernetesName"},
+            "operatorNamespace": {"$ref": "#/definitions/kubernetesName"},
+            "imageName": {"type": "string", "minLength": 1},
+            "imagePullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]},
+            "instances": {"type": "integer", "const": 1},
+            "database": {"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z_][a-z0-9_]*$"},
+            "owner": {"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z_][a-z0-9_]*$"},
+            "credentialsSecret": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "usernameKey", "passwordKey"],
+              "properties": {
+                "name": {"type": "string", "maxLength": 253},
+                "usernameKey": {"type": "string", "const": "username"},
+                "passwordKey": {"type": "string", "const": "password"}
+              }
+            },
+            "storage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["size", "storageClass"],
+              "properties": {
+                "size": {"type": "string", "minLength": 2},
+                "storageClass": {"type": "string"}
+              }
+            },
+            "resources": {"$ref": "#/definitions/resources"}
+          }
+        },
+        "itemsLoadGenerator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["image", "itemCount", "seedMode", "backoffLimit", "activeDeadlineSeconds", "ttlSecondsAfterFinished", "resources"],
+          "properties": {
+            "image": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["repository", "tag", "digest", "pullPolicy"],
+              "properties": {
+                "repository": {"type": "string", "minLength": 1},
+                "tag": {"type": "string", "minLength": 1},
+                "digest": {"type": "string", "pattern": "^$|^sha256:[0-9a-f]{64}$"},
+                "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
+              }
+            },
+            "itemCount": {"type": "integer", "minimum": 1, "maximum": 10000},
+            "seedMode": {"type": "string", "enum": ["skip-if-present", "append"]},
+            "backoffLimit": {"type": "integer", "minimum": 0, "maximum": 6},
+            "activeDeadlineSeconds": {"type": "integer", "minimum": 30, "maximum": 3600},
+            "ttlSecondsAfterFinished": {"type": "integer", "minimum": 60, "maximum": 86400},
+            "resources": {"$ref": "#/definitions/resources"}
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "featureToggle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {"type": "boolean"}
+      }
+    },
+    "kubernetesName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "properties": {
+        "requests": {"$ref": "#/definitions/resourcePair"},
+        "limits": {"$ref": "#/definitions/resourcePair"}
+      }
+    },
+    "resourcePair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu", "memory"],
+      "properties": {
+        "cpu": {"type": "string", "minLength": 1},
+        "memory": {"type": "string", "minLength": 2}
+      }
+    }
+  }
+}

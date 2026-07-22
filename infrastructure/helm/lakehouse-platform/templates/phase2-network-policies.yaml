@@ -1,0 +1,65 @@
+{{- if and .Values.features.sourcePostgresql.enabled .Values.features.itemsLoadGenerator.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-postgresql-ingress" (include "lakehouse-platform.fullname" .) | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Values.namespace.name | quote }}
+  labels:
+    {{- include "lakehouse-platform.baseLabels" . | nindent 4 }}
+    app.kubernetes.io/component: "source-postgresql"
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: {{ .Values.components.sourcePostgresql.clusterName | quote }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "lakehouse-platform.itemsSelectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.components.sourcePostgresql.operatorNamespace | quote }}
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-items-egress" (include "lakehouse-platform.fullname" .) | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Values.namespace.name | quote }}
+  labels:
+    {{- include "lakehouse-platform.itemsLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "lakehouse-platform.itemsSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "kube-system"
+          podSelector:
+            matchLabels:
+              k8s-app: "kube-dns"
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: {{ .Values.components.sourcePostgresql.clusterName | quote }}
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}

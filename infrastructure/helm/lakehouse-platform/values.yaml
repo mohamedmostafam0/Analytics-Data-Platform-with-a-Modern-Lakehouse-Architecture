@@ -1,0 +1,107 @@
+global:
+  environment: local
+  profile: minimal
+  sourceRepository: https://github.com/mohamedmostafam0/Analytics-Data-Platform-with-a-Modern-Lakehouse-Architecture
+  gitCommit: ""
+
+namespace:
+  create: true
+  name: lakehouse-platform
+  labels: {}
+  annotations: {}
+
+# The base values remain foundation-only. The explicit minimal overlay enables the
+# approved Phase 2 source PostgreSQL and item-seeding Job.
+features:
+  postgresql:
+    enabled: false
+  sourcePostgresql:
+    enabled: false
+  cdcPostgresql:
+    enabled: false
+  itemsLoadGenerator:
+    enabled: false
+  systemLoadGenerator:
+    enabled: false
+  flashSaleLoadGenerator:
+    enabled: false
+  minio:
+    enabled: false
+  minioClient:
+    enabled: false
+  icebergRest:
+    enabled: false
+  spark:
+    enabled: false
+  trino:
+    enabled: false
+  kafka:
+    enabled: false
+  kafkaSetup:
+    enabled: false
+  schemaRegistry:
+    enabled: false
+  kafkaConnect:
+    enabled: false
+  connectorSetup:
+    enabled: false
+  loginLoadGenerator:
+    enabled: false
+  redpandaConsole:
+    enabled: false
+  flink:
+    enabled: false
+  clickhouse:
+    enabled: false
+  openSearch:
+    enabled: false
+  streamlit:
+    enabled: false
+  superset:
+    enabled: false
+  airflow:
+    enabled: false
+  mailhog:
+    enabled: false
+
+components:
+  sourcePostgresql:
+    clusterName: items-postgresql
+    operatorNamespace: cnpg-system
+    imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie@sha256:9287ce030c6f3ce822e383b019ae4aaf1e8370bff3b39f9c51dc10d69dc97219
+    imagePullPolicy: IfNotPresent
+    instances: 1
+    database: oneshop
+    owner: items_app
+    credentialsSecret:
+      name: ""
+      usernameKey: username
+      passwordKey: password
+    storage:
+      size: 1Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+  itemsLoadGenerator:
+    image:
+      repository: lakehouse/items-loadgen
+      tag: phase2-0.1.0
+      digest: ""
+      pullPolicy: Never
+    itemCount: 100
+    seedMode: skip-if-present
+    backoffLimit: 2
+    activeDeadlineSeconds: 300
+    ttlSecondsAfterFinished: 900
+    resources:
+      requests:
+        cpu: 25m
+        memory: 32Mi
+      limits:
+        cpu: 250m
+        memory: 128Mi

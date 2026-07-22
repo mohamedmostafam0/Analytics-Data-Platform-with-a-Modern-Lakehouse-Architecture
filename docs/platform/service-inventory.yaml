@@ -1,0 +1,781 @@
+inventory_version: 1
+discovered_at: "2026-07-22"
+source_files:
+  - docker-compose.yaml
+  - airflow.yaml
+service_count: 29
+notes:
+  - Resource classes are relative estimates; Compose defines no CPU or memory limits.
+  - The root .env is untracked and mutable. The known contract is the union of .env.example and referenced local keys; values are intentionally excluded.
+  - A healthcheck value of unknown means no healthcheck is declared in the inspected Compose model.
+
+known_root_environment_contract: &root_environment
+  - POSTGRES_HOST
+  - POSTGRES_PORT
+  - POSTGRES_USER
+  - POSTGRES_PASSWORD
+  - POSTGRES_DB
+  - CDC_POSTGRES_USER
+  - CDC_POSTGRES_PASSWORD
+  - CDC_POSTGRES_DB
+  - AWS_ACCESS_KEY_ID
+  - AWS_SECRET_ACCESS_KEY
+  - AWS_REGION
+  - CATALOG_WAREHOUSE
+  - CATALOG_S3_ENDPOINT
+  - MINIO_ROOT_USER
+  - MINIO_ROOT_PASSWORD
+  - MINIO_DOMAIN
+  - S3_ENDPOINT
+  - SUPERSET_SECRET_KEY
+  - SUPERSET_ADMIN_USERNAME
+  - SUPERSET_ADMIN_PASSWORD
+  - SUPERSET_ADMIN_EMAIL
+  - SUPERSET_DB
+  - SUPERSET_DB_USER
+  - SUPERSET_DB_PASSWORD
+  - MINIO_URL
+  - MINIO_ACCESS_KEY
+  - MINIO_SECRET_KEY
+  - MINIO_BUCKET_NAME
+  - USERS_SEED_COUNT
+  - ITEM_SEED_COUNT
+  - ITEM_INVENTORY_MIN
+  - ITEM_INVENTORY_MAX
+  - ITEM_PRICE_MIN
+  - ITEM_PRICE_MAX
+  - PURCHASE_GEN_COUNT
+  - PURCHASE_GEN_EVERY_MS
+  - PAGEVIEW_MULTIPLIER
+  - KAFKA_BROKERS
+  - SCHEMA_REGISTRY_URL
+  - AIRFLOW_DB_USER
+  - AIRFLOW_DB_PASSWORD
+  - AIRFLOW_DB
+  - AIRFLOW_ADMIN_USER
+  - AIRFLOW_ADMIN_PASSWORD
+  - AIRFLOW_ADMIN_EMAIL
+  - AIRFLOW_WEBSERVER_SECRET_KEY
+  - CLICKHOUSE_USER
+  - CLICKHOUSE_PASSWORD
+
+known_root_secret_contract: &root_secrets
+  - POSTGRES_USER
+  - POSTGRES_PASSWORD
+  - CDC_POSTGRES_USER
+  - CDC_POSTGRES_PASSWORD
+  - AWS_ACCESS_KEY_ID
+  - AWS_SECRET_ACCESS_KEY
+  - MINIO_ROOT_USER
+  - MINIO_ROOT_PASSWORD
+  - SUPERSET_SECRET_KEY
+  - SUPERSET_ADMIN_USERNAME
+  - SUPERSET_ADMIN_PASSWORD
+  - SUPERSET_DB_USER
+  - SUPERSET_DB_PASSWORD
+  - MINIO_ACCESS_KEY
+  - MINIO_SECRET_KEY
+  - AIRFLOW_DB_USER
+  - AIRFLOW_DB_PASSWORD
+  - AIRFLOW_ADMIN_USER
+  - AIRFLOW_ADMIN_PASSWORD
+  - AIRFLOW_WEBSERVER_SECRET_KEY
+  - CLICKHOUSE_USER
+  - CLICKHOUSE_PASSWORD
+
+services:
+  connect:
+    source_compose_file: docker-compose.yaml
+    purpose: Kafka Connect worker with Debezium, Avro, and OpenSearch plugins.
+    category: change-data-capture
+    implementation: custom-image
+    image: unknown
+    build_context: ./kafka-connect
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [kafka, debezium-postgres, schema-registry]
+    runtime_dependencies: [kafka, schema-registry]
+    ports: ["8083:8083/tcp"]
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [kafka-connect/Dockerfile]
+    environment_variables: [BOOTSTRAP_SERVERS, GROUP_ID, CONFIG_STORAGE_TOPIC, OFFSET_STORAGE_TOPIC, STATUS_STORAGE_TOPIC, CONFIG_STORAGE_REPLICATION_FACTOR, OFFSET_STORAGE_REPLICATION_FACTOR, STATUS_STORAGE_REPLICATION_FACTOR, KEY_CONVERTER, VALUE_CONVERTER, CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL, CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL, INTERNAL_KEY_CONVERTER, INTERNAL_VALUE_CONVERTER, CONNECT_REST_ADVERTISED_HOST_NAME, CONNECT_GROUP_INITIAL_REBALANCE_DELAY_MS, PLUGIN_PATH]
+    secret_variables: []
+    healthcheck: unknown
+    startup_command: image default (unknown)
+    estimated_resource_class: medium
+    kubernetes_strategy: deployment
+    proposed_migration_phase: 3
+    notes: Connector-level PostgreSQL and OpenSearch dependencies are activated by connector-setup.
+
+  debezium-postgres:
+    source_compose_file: docker-compose.yaml
+    purpose: Logical-replication-enabled PostgreSQL source for item and purchase CDC.
+    category: database
+    implementation: third-party
+    image: debezium/postgres:17
+    build_context: unknown
+    stateful: true
+    required_for_minimal_slice: true
+    dependencies: []
+    runtime_dependencies: []
+    ports: ["5433:5432/tcp"]
+    networks: [iceberg_net]
+    volumes: ["./postgres/postgres_bootstrap.sql:/docker-entrypoint-initdb.d/postgres_bootstrap.sql"]
+    config_files: [postgres/postgres_bootstrap.sql]
+    environment_variables: [POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB]
+    secret_variables: [CDC_POSTGRES_USER, CDC_POSTGRES_PASSWORD]
+    healthcheck: "pg_isready -U ${CDC_POSTGRES_USER} -d ${CDC_POSTGRES_DB}"
+    startup_command: image default (unknown)
+    estimated_resource_class: medium
+    kubernetes_strategy: operator_or_maintained_chart
+    proposed_migration_phase: 2
+    notes: No data volume; shared bootstrap requests pgvector and image compatibility is unverified.
+
+  items-loadgen:
+    source_compose_file: docker-compose.yaml
+    purpose: One-shot Python item seeder for the CDC PostgreSQL database.
+    category: source
+    implementation: custom
+    image: unknown
+    build_context: load-generators/items-load
+    stateful: false
+    required_for_minimal_slice: true
+    dependencies: [debezium-postgres]
+    runtime_dependencies: [debezium-postgres]
+    ports: []
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [load-generators/items-load/Dockerfile, load-generators/items-load/item_seeder.py, load-generators/items-load/requirements.txt]
+    environment_variables: [POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD]
+    secret_variables: [POSTGRES_USER, POSTGRES_PASSWORD]
+    healthcheck: unknown
+    startup_command: python item_seeder.py
+    estimated_resource_class: tiny
+    kubernetes_strategy: job
+    proposed_migration_phase: 2
+    notes: Code inserts 1000 rows on every run; documentation's idempotency claim is unsupported.
+
+  login-loadgen:
+    source_compose_file: docker-compose.yaml
+    purpose: Continuous Avro login-event producer.
+    category: source
+    implementation: custom
+    image: unknown
+    build_context: load-generators/login-load
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [kafka, schema-registry]
+    runtime_dependencies: [kafka, schema-registry]
+    ports: []
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [load-generators/login-load/Dockerfile, load-generators/login-load/main.py, load-generators/login-load/requirements.txt]
+    environment_variables: [KAFKA_BROKERS, SCHEMA_REGISTRY_URL]
+    secret_variables: []
+    healthcheck: unknown
+    startup_command: python main.py
+    estimated_resource_class: small
+    kubernetes_strategy: deployment_or_job
+    proposed_migration_phase: 3
+    notes: Handles SIGTERM and waits indefinitely for Schema Registry.
+
+  kafka:
+    source_compose_file: docker-compose.yaml
+    purpose: Single-node KRaft event broker.
+    category: messaging
+    implementation: third-party
+    image: apache/kafka:3.7.1
+    build_context: unknown
+    stateful: true
+    required_for_minimal_slice: false
+    dependencies: []
+    runtime_dependencies: []
+    ports: ["9092:9092/tcp"]
+    networks: [iceberg_net]
+    volumes: ["kafka_data:/tmp/kraft-combined-logs"]
+    config_files: [docker-compose.yaml]
+    environment_variables: [KAFKA_NODE_ID, KAFKA_PROCESS_ROLES, KAFKA_CONTROLLER_QUORUM_VOTERS, KAFKA_LISTENERS, KAFKA_ADVERTISED_LISTENERS, KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, KAFKA_CONTROLLER_LISTENER_NAMES, KAFKA_INTER_BROKER_LISTENER_NAME, KAFKA_AUTO_CREATE_TOPICS_ENABLE, KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR, KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS]
+    secret_variables: []
+    healthcheck: kafka-topics.sh list against localhost:9092
+    startup_command: image default (unknown)
+    estimated_resource_class: large
+    kubernetes_strategy: operator_or_maintained_chart
+    proposed_migration_phase: 3
+    notes: PLAINTEXT single-broker development settings and replication factor one.
+
+  kafka-setup:
+    source_compose_file: docker-compose.yaml
+    purpose: One-shot creation of schema and login topics.
+    category: support
+    implementation: third-party-image-with-command
+    image: apache/kafka:3.7.1
+    build_context: unknown
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [kafka]
+    runtime_dependencies: [kafka]
+    ports: []
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [docker-compose.yaml]
+    environment_variables: []
+    secret_variables: []
+    healthcheck: unknown
+    startup_command: kafka-topics.sh create four topics
+    estimated_resource_class: tiny
+    kubernetes_strategy: job
+    proposed_migration_phase: 3
+    notes: CDC topics are not listed and depend on broker auto-creation.
+
+  schema-registry:
+    source_compose_file: docker-compose.yaml
+    purpose: Confluent Avro Schema Registry backed by Kafka.
+    category: messaging
+    implementation: third-party
+    image: confluentinc/cp-schema-registry:7.6.0
+    build_context: unknown
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [kafka]
+    runtime_dependencies: [kafka]
+    ports: ["8081:8081/tcp"]
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [docker-compose.yaml]
+    environment_variables: [SCHEMA_REGISTRY_HOST_NAME, SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS, SCHEMA_REGISTRY_LISTENERS]
+    secret_variables: []
+    healthcheck: "curl -f http://localhost:8081"
+    startup_command: image default (unknown)
+    estimated_resource_class: medium
+    kubernetes_strategy: maintained_chart_or_deployment
+    proposed_migration_phase: 3
+    notes: Uses plaintext Kafka and HTTP endpoints.
+
+  loadgen:
+    source_compose_file: docker-compose.yaml
+    purpose: Finite synthetic users/items/purchases and MinIO pageview generator.
+    category: source
+    implementation: custom
+    image: unknown
+    build_context: load-generators/sys-load
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [postgres, minio]
+    runtime_dependencies: [postgres, minio, mc]
+    ports: []
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [.env, load-generators/sys-load/Dockerfile, load-generators/sys-load/generate_load.py, load-generators/sys-load/requirements.txt]
+    environment_variables: *root_environment
+    secret_variables: *root_secrets
+    healthcheck: unknown
+    startup_command: python generate_load.py
+    estimated_resource_class: medium
+    kubernetes_strategy: job
+    proposed_migration_phase: 4
+    notes: Entire root .env is injected; pageview multiplier can produce substantial object counts.
+
+  mc:
+    source_compose_file: docker-compose.yaml
+    purpose: MinIO bucket bootstrap and access-policy setup.
+    category: support
+    implementation: third-party
+    image: minio/mc (unpinned)
+    build_context: unknown
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [minio]
+    runtime_dependencies: [minio]
+    ports: []
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [.env, docker-compose.yaml]
+    environment_variables: *root_environment
+    secret_variables: *root_secrets
+    healthcheck: unknown
+    startup_command: configure alias, create warehouse/pageviews, grant anonymous warehouse access, tail forever
+    estimated_resource_class: tiny
+    kubernetes_strategy: job
+    proposed_migration_phase: 3
+    notes: Entire root .env is injected; command intentionally keeps container alive.
+
+  minio:
+    source_compose_file: docker-compose.yaml
+    purpose: S3-compatible object storage for Iceberg and raw pageviews.
+    category: object-storage
+    implementation: third-party
+    image: minio/minio (unpinned)
+    build_context: unknown
+    stateful: true
+    required_for_minimal_slice: false
+    dependencies: []
+    runtime_dependencies: []
+    ports: ["9001:9001/tcp", "9000:9000/tcp"]
+    networks: [iceberg_net]
+    volumes: ["minio_data:/data"]
+    config_files: [.env, docker-compose.yaml]
+    environment_variables: *root_environment
+    secret_variables: *root_secrets
+    healthcheck: "curl -f http://localhost:9000/minio/health/live"
+    startup_command: minio server /data --console-address :9001
+    estimated_resource_class: medium
+    kubernetes_strategy: operator_or_maintained_chart
+    proposed_migration_phase: 3
+    notes: Entire root .env is injected and transport is HTTP.
+
+  opensearch:
+    source_compose_file: docker-compose.yaml
+    purpose: Item search index populated by Kafka Connect.
+    category: analytics
+    implementation: third-party
+    image: opensearchproject/opensearch:2.11.0
+    build_context: unknown
+    stateful: true
+    required_for_minimal_slice: false
+    dependencies: []
+    runtime_dependencies: []
+    ports: ["9200:9200/tcp", "9600:9600/tcp"]
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [docker-compose.yaml]
+    environment_variables: [cluster.name, node.name, discovery.type, bootstrap.memory_lock, OPENSEARCH_JAVA_OPTS, DISABLE_INSTALL_DEMO_CONFIG, DISABLE_SECURITY_PLUGIN]
+    secret_variables: []
+    healthcheck: unknown
+    startup_command: image default (unknown)
+    estimated_resource_class: large
+    kubernetes_strategy: operator_or_maintained_chart
+    proposed_migration_phase: 5
+    notes: Security disabled, 512 MiB JVM heap configured, no persistent volume; not currently a logging backend.
+
+  postgres:
+    source_compose_file: docker-compose.yaml
+    purpose: Main OLTP and pgvector review database for batch and semantic search.
+    category: database
+    implementation: third-party
+    image: pgvector/pgvector:pg18
+    build_context: unknown
+    stateful: true
+    required_for_minimal_slice: false
+    dependencies: []
+    runtime_dependencies: []
+    ports: ["5432:5432/tcp"]
+    networks: [iceberg_net]
+    volumes: ["./postgres/postgres_bootstrap.sql:/docker-entrypoint-initdb.d/postgres_bootstrap.sql"]
+    config_files: [.env, postgres/postgres_bootstrap.sql]
+    environment_variables: *root_environment
+    secret_variables: *root_secrets
+    healthcheck: "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
+    startup_command: image default (unknown)
+    estimated_resource_class: medium
+    kubernetes_strategy: operator_or_maintained_chart
+    proposed_migration_phase: 3
+    notes: Entire root .env is injected; no data volume; bootstrap contains a tracked development password literal.
+
+  redpanda-console:
+    source_compose_file: docker-compose.yaml
+    purpose: Kafka topic and Schema Registry development UI.
+    category: support
+    implementation: third-party
+    image: docker.redpanda.com/redpandadata/console:latest
+    build_context: unknown
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: []
+    runtime_dependencies: [kafka, schema-registry]
+    ports: ["8084:8080/tcp"]
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [docker-compose.yaml]
+    environment_variables: [KAFKA_BROKERS, KAFKA_SCHEMAREGISTRY_ENABLED, KAFKA_SCHEMAREGISTRY_URLS]
+    secret_variables: []
+    healthcheck: unknown
+    startup_command: image default (unknown)
+    estimated_resource_class: small
+    kubernetes_strategy: deployment
+    proposed_migration_phase: 3
+    notes: Runtime dependencies are not declared and image uses latest.
+
+  connector-setup:
+    source_compose_file: docker-compose.yaml
+    purpose: Installs tools at runtime and registers every Kafka connector JSON file.
+    category: support
+    implementation: third-party-image-with-script
+    image: debian:bookworm-slim
+    build_context: unknown
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [connect]
+    runtime_dependencies: [connect, debezium-postgres, schema-registry, opensearch]
+    ports: []
+    networks: [iceberg_net]
+    volumes: ["./kafka-connect:/kafka-connect"]
+    config_files: [kafka-connect/register_connector.sh, kafka-connect/connector.json, kafka-connect/purchases-connector.json, kafka-connect/opensearch-sink.json]
+    environment_variables: [CONNECT_HOST, CONNECT_PORT, CDC_POSTGRES_USER, CDC_POSTGRES_PASSWORD, CDC_POSTGRES_DB]
+    secret_variables: [CDC_POSTGRES_USER, CDC_POSTGRES_PASSWORD]
+    healthcheck: unknown
+    startup_command: apt-get tools then register_connector.sh
+    estimated_resource_class: tiny
+    kubernetes_strategy: job
+    proposed_migration_phase: 3
+    notes: Failure path can print expanded secret-bearing payload; runtime package installation is unpinned.
+
+  rest:
+    source_compose_file: docker-compose.yaml
+    purpose: Iceberg REST catalog fixture for Spark and Trino.
+    category: table-format
+    implementation: third-party
+    image: apache/iceberg-rest-fixture (unpinned)
+    build_context: unknown
+    stateful: unknown
+    required_for_minimal_slice: false
+    dependencies: []
+    runtime_dependencies: [minio]
+    ports: ["8181:8181/tcp"]
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [.env, docker-compose.yaml]
+    environment_variables: *root_environment
+    secret_variables: *root_secrets
+    healthcheck: unknown
+    startup_command: image default (unknown)
+    estimated_resource_class: small
+    kubernetes_strategy: evaluate_catalog_service_or_deployment
+    proposed_migration_phase: 3
+    notes: Entire root .env is injected; persistence and production suitability are unknown.
+
+  spark-iceberg:
+    source_compose_file: docker-compose.yaml
+    purpose: Spark Thrift server, Iceberg schema bootstrap, and batch ETL runtime.
+    category: batch-processing
+    implementation: custom-image
+    image: tabulario/spark-iceberg (Compose also builds local context; tag unpinned)
+    build_context: spark
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [rest, minio]
+    runtime_dependencies: [rest, minio]
+    ports: ["8080:8080/tcp", "10000:10000/tcp", "10001:10001/tcp"]
+    networks: [iceberg_net]
+    volumes: ["./warehouse:/home/iceberg/warehouse", "./notebooks:/home/iceberg/notebooks/notebooks", "./spark/scripts:/home/iceberg/scripts"]
+    config_files: [.env, spark/Dockerfile, spark/entrypoint.sh, spark/spark-defaults.conf, spark/.pyiceberg.yaml, spark/scripts]
+    environment_variables: *root_environment
+    secret_variables: *root_secrets
+    healthcheck: unknown
+    startup_command: create all Iceberg schemas then start Spark Thrift server
+    estimated_resource_class: "very large"
+    kubernetes_strategy: spark_operator_or_jobs
+    proposed_migration_phase: 4
+    notes: PostgreSQL is an optional JDBC ETL dependency; entire root .env is injected; fixed readiness sleep.
+
+  superset:
+    source_compose_file: docker-compose.yaml
+    purpose: BI web application with an auto-created Trino connection.
+    category: visualization
+    implementation: custom-image
+    image: unknown
+    build_context: ./superset
+    stateful: true
+    required_for_minimal_slice: false
+    dependencies: [superset-db]
+    runtime_dependencies: [superset-db]
+    ports: ["8088:8088/tcp"]
+    networks: [iceberg_net]
+    volumes: ["./superset/superset_home:/app/superset_home", "./superset/init_connections.py:/app/init_connections.py"]
+    config_files: [superset/Dockerfile, superset/init_connections.py]
+    environment_variables: [SUPERSET_SECRET_KEY, ADMIN_USERNAME, ADMIN_PASSWORD, ADMIN_FIRST_NAME, ADMIN_LAST_NAME, ADMIN_EMAIL, DATABASE_URL]
+    secret_variables: [SUPERSET_SECRET_KEY, SUPERSET_ADMIN_USERNAME, SUPERSET_ADMIN_PASSWORD, SUPERSET_DB_USER, SUPERSET_DB_PASSWORD]
+    healthcheck: unknown
+    startup_command: migrate DB, create admin, init, create Trino connection, run webserver
+    estimated_resource_class: medium
+    kubernetes_strategy: maintained_chart
+    proposed_migration_phase: 5
+    notes: Trino is an optional runtime integration not declared in depends_on.
+
+  superset-db:
+    source_compose_file: docker-compose.yaml
+    purpose: PostgreSQL metadata database for Superset.
+    category: database
+    implementation: third-party
+    image: postgres:18
+    build_context: unknown
+    stateful: true
+    required_for_minimal_slice: false
+    dependencies: []
+    runtime_dependencies: []
+    ports: []
+    networks: [iceberg_net]
+    volumes: ["./superset/superset_db_data:/var/lib/postgresql/data"]
+    config_files: [.env, docker-compose.yaml]
+    environment_variables: *root_environment
+    secret_variables: *root_secrets
+    healthcheck: unknown
+    startup_command: image default (unknown)
+    estimated_resource_class: medium
+    kubernetes_strategy: bundled_with_superset_chart_or_external_database
+    proposed_migration_phase: 5
+    notes: Entire root .env is injected; bind-mounted runtime state.
+
+  trino:
+    source_compose_file: docker-compose.yaml
+    purpose: Interactive SQL query engine over Iceberg.
+    category: query-engine
+    implementation: third-party
+    image: trinodb/trino (unpinned)
+    build_context: unknown
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: []
+    runtime_dependencies: [rest, minio]
+    ports: ["9090:8080/tcp"]
+    networks: [iceberg_net]
+    volumes: ["./trino/etc/catalog:/etc/trino/catalog"]
+    config_files: [trino/etc/catalog/iceberg.properties]
+    environment_variables: []
+    secret_variables: []
+    healthcheck: unknown
+    startup_command: image default (unknown)
+    estimated_resource_class: large
+    kubernetes_strategy: maintained_chart
+    proposed_migration_phase: 5
+    notes: Catalog contains tracked development object-store credential literals.
+
+  flashsale-loadgen:
+    source_compose_file: docker-compose.yaml
+    purpose: Continuous high-rate purchase generator for CDC and real-time analytics.
+    category: source
+    implementation: custom
+    image: unknown
+    build_context: load-generators/flashsale-load
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [debezium-postgres]
+    runtime_dependencies: [debezium-postgres]
+    ports: []
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [load-generators/flashsale-load/Dockerfile, load-generators/flashsale-load/generate_load.py, load-generators/flashsale-load/requirements.txt]
+    environment_variables: [POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, USERS_SEED_COUNT, ITEM_SEED_COUNT, PURCHASE_GEN_EVERY_MS]
+    secret_variables: [POSTGRES_USER, POSTGRES_PASSWORD]
+    healthcheck: unknown
+    startup_command: python generate_load.py
+    estimated_resource_class: small
+    kubernetes_strategy: deployment_or_job
+    proposed_migration_phase: 3
+    notes: Infinite writer; logs a database server address and count for every insert.
+
+  clickhouse:
+    source_compose_file: docker-compose.yaml
+    purpose: Kafka-engine purchase ingestion and real-time OLAP storage.
+    category: analytics
+    implementation: third-party
+    image: clickhouse/clickhouse-server:24.8
+    build_context: unknown
+    stateful: true
+    required_for_minimal_slice: false
+    dependencies: [schema-registry, kafka]
+    runtime_dependencies: [schema-registry, kafka]
+    ports: ["9002:9000/tcp", "8123:8123/tcp"]
+    networks: [iceberg_net]
+    volumes: ["./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql"]
+    config_files: [clickhouse/init.sql]
+    environment_variables: [CLICKHOUSE_USER, CLICKHOUSE_PASSWORD]
+    secret_variables: [CLICKHOUSE_USER, CLICKHOUSE_PASSWORD]
+    healthcheck: "wget --spider http://localhost:8123/ping"
+    startup_command: image default (unknown)
+    estimated_resource_class: large
+    kubernetes_strategy: operator_or_maintained_chart
+    proposed_migration_phase: 5
+    notes: No data volume; Compose contains a password fallback.
+
+  streamlit:
+    source_compose_file: docker-compose.yaml
+    purpose: Flash-sale dashboard and pgvector semantic-review search.
+    category: visualization
+    implementation: custom
+    image: unknown
+    build_context: streamlit
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [clickhouse, postgres]
+    runtime_dependencies: [clickhouse, postgres]
+    ports: ["8501:8501/tcp"]
+    networks: [iceberg_net]
+    volumes: ["./streamlit:/app"]
+    config_files: [.env, streamlit/Dockerfile, streamlit/app.py, streamlit/pages/02_Review_Search.py, streamlit/requirements.txt]
+    environment_variables: *root_environment
+    secret_variables: *root_secrets
+    healthcheck: "curl -f http://localhost:8501/_stcore/health"
+    startup_command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+    estimated_resource_class: large
+    kubernetes_strategy: deployment
+    proposed_migration_phase: 5
+    notes: Entire root .env is injected; image includes sentence-transformers and Torch.
+
+  jobmanager:
+    source_compose_file: docker-compose.yaml
+    purpose: Flink control plane and SQL UI for login-event jobs.
+    category: stream-processing
+    implementation: third-party
+    image: flink:1.17.2-scala_2.12-java11
+    build_context: unknown
+    stateful: true
+    required_for_minimal_slice: false
+    dependencies: []
+    runtime_dependencies: []
+    ports: ["8082:8081/tcp"]
+    networks: [iceberg_net]
+    volumes: ["./flink/sql:/opt/flink/flink-sql", "./ip_geo.csv:/opt/flink/ip_geo.csv", "./flink/lib/*.jar:/opt/flink/lib/*.jar"]
+    config_files: [flink/sql/create-tables.sql, flink/sql/insert-jobs.sql, ip_geo.csv, flink/lib]
+    environment_variables: [FLINK_PROPERTIES]
+    secret_variables: []
+    healthcheck: "curl -f http://localhost:8081/"
+    startup_command: jobmanager
+    estimated_resource_class: medium
+    kubernetes_strategy: flink_kubernetes_operator
+    proposed_migration_phase: 4
+    notes: No checkpoint/savepoint persistence configured; SQL submission is manual.
+
+  taskmanager:
+    source_compose_file: docker-compose.yaml
+    purpose: Single Flink worker with 20 task slots.
+    category: stream-processing
+    implementation: third-party
+    image: flink:1.17.2-scala_2.12-java11
+    build_context: unknown
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [jobmanager]
+    runtime_dependencies: [jobmanager]
+    ports: []
+    networks: [iceberg_net]
+    volumes: ["./ip_geo.csv:/opt/flink/ip_geo.csv", "./flink/lib/*.jar:/opt/flink/lib/*.jar"]
+    config_files: [ip_geo.csv, flink/lib]
+    environment_variables: [FLINK_PROPERTIES]
+    secret_variables: []
+    healthcheck: unknown
+    startup_command: taskmanager
+    estimated_resource_class: large
+    kubernetes_strategy: flink_kubernetes_operator
+    proposed_migration_phase: 4
+    notes: Twenty slots have no matching CPU/memory limits.
+
+  airflow-db:
+    source_compose_file: airflow.yaml
+    purpose: PostgreSQL metadata database for Airflow.
+    category: database
+    implementation: third-party
+    image: postgres:18
+    build_context: unknown
+    stateful: true
+    required_for_minimal_slice: false
+    dependencies: []
+    runtime_dependencies: []
+    ports: []
+    networks: [iceberg_net]
+    volumes: ["./airflow/db:/var/lib/postgresql"]
+    config_files: [.env, airflow.yaml]
+    environment_variables: [POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB]
+    secret_variables: [AIRFLOW_DB_USER, AIRFLOW_DB_PASSWORD]
+    healthcheck: unknown
+    startup_command: image default (unknown)
+    estimated_resource_class: medium
+    kubernetes_strategy: bundled_with_airflow_chart_or_external_database
+    proposed_migration_phase: 4
+    notes: Bind-mounted generated state; no healthcheck.
+
+  mailhog:
+    source_compose_file: airflow.yaml
+    purpose: Development SMTP server and web inbox for Airflow alerts.
+    category: support
+    implementation: third-party
+    image: mailhog/mailhog:latest
+    build_context: unknown
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: []
+    runtime_dependencies: []
+    ports: ["1025:1025/tcp", "8025:8025/tcp"]
+    networks: [iceberg_net]
+    volumes: []
+    config_files: [airflow.yaml]
+    environment_variables: []
+    secret_variables: []
+    healthcheck: unknown
+    startup_command: image default (unknown)
+    estimated_resource_class: tiny
+    kubernetes_strategy: deployment
+    proposed_migration_phase: 4
+    notes: Development only; image uses latest.
+
+  airflow-init:
+    source_compose_file: airflow.yaml
+    purpose: One-shot Airflow metadata initialization and admin creation.
+    category: orchestration
+    implementation: custom-image
+    image: unknown
+    build_context: ./airflow
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [airflow-db]
+    runtime_dependencies: [airflow-db]
+    ports: []
+    networks: [iceberg_net]
+    volumes: ["./airflow/dags:/opt/airflow/dags"]
+    config_files: [.env, airflow.yaml, airflow/dockerfile, airflow/dags]
+    environment_variables: *root_environment
+    secret_variables: *root_secrets
+    healthcheck: unknown
+    startup_command: airflow db init then airflow users create
+    estimated_resource_class: tiny
+    kubernetes_strategy: helm_hook_or_job
+    proposed_migration_phase: 4
+    notes: Entire root .env is injected; depends only on database process start.
+
+  airflow-scheduler:
+    source_compose_file: airflow.yaml
+    purpose: LocalExecutor scheduler for segmentation and embedding DAGs.
+    category: orchestration
+    implementation: custom-image
+    image: unknown
+    build_context: ./airflow
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [airflow-init]
+    runtime_dependencies: [airflow-db]
+    ports: []
+    networks: [iceberg_net]
+    volumes: ["./airflow/dags:/opt/airflow/dags"]
+    config_files: [.env, airflow.yaml, airflow/dockerfile, airflow/dags]
+    environment_variables: *root_environment
+    secret_variables: *root_secrets
+    healthcheck: unknown
+    startup_command: scheduler
+    estimated_resource_class: medium
+    kubernetes_strategy: maintained_airflow_chart
+    proposed_migration_phase: 4
+    notes: DAG integrations include Trino, MinIO, main PostgreSQL, and MailHog; entire root .env is injected.
+
+  airflow-webserver:
+    source_compose_file: airflow.yaml
+    purpose: Airflow web UI and API process.
+    category: orchestration
+    implementation: custom-image
+    image: unknown
+    build_context: ./airflow
+    stateful: false
+    required_for_minimal_slice: false
+    dependencies: [airflow-init]
+    runtime_dependencies: [airflow-db]
+    ports: ["8085:8080/tcp"]
+    networks: [iceberg_net]
+    volumes: ["./airflow/dags:/opt/airflow/dags"]
+    config_files: [.env, airflow.yaml, airflow/dockerfile, airflow/dags]
+    environment_variables: *root_environment
+    secret_variables: *root_secrets
+    healthcheck: unknown
+    startup_command: webserver
+    estimated_resource_class: medium
+    kubernetes_strategy: maintained_airflow_chart
+    proposed_migration_phase: 4
+    notes: Entire root .env is injected and Airflow config exposure is enabled.

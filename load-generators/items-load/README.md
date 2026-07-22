@@ -4,8 +4,10 @@ A Python-based synthetic data generator for populating the PostgreSQL `items` ta
 
 ## 🚀 Features
 -   Generates realistic product data using `Faker`.
--   Populates `users`, `items`, and `purchases` tables (depending on script logic).
--   Idempotent: Checks if data exists before inserting.
+-   Populates the `items` table.
+-   Uses a PostgreSQL advisory lock to serialize concurrent seed jobs.
+-   Defaults to `skip-if-present`, so a successful rerun makes no changes when the
+    table already contains data.
 
 ## 🛠️ Usage
 
@@ -31,8 +33,8 @@ To run the script locally (outside Docker), you need to set the environment vari
 2.  **Run Script**:
     ```bash
     export POSTGRES_HOST=localhost
-    export POSTGRES_USER=postgresuser
-    export POSTGRES_PASSWORD=postgrespw
+    export POSTGRES_USER=<local-user>
+    export POSTGRES_PASSWORD=<local-password>
     export POSTGRES_DB=oneshop
     
     python item_seeder.py
@@ -47,5 +49,8 @@ The generator is configured via environment variables (defined in `.env`):
 | `POSTGRES_PORT` | Database port | `5432` |
 | `POSTGRES_DB` | Database name | `oneshop` |
 | `ITEM_SEED_COUNT` | Number of items to generate | `1000` |
-| `ITEM_PRICE_MIN` | Minimum price | `5` |
-| `ITEM_PRICE_MAX` | Maximum price | `500` |
+| `ITEM_SEED_MODE` | `skip-if-present` or explicit `append` | `skip-if-present` |
+
+`POSTGRES_USER` and `POSTGRES_PASSWORD` are required and have no application
+defaults. The container uses a digest-pinned Python 3.12 base and runs as UID/GID
+`10001`.

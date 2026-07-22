@@ -1,0 +1,13 @@
+global:
+  profile: minimal
+
+features:
+  sourcePostgresql:
+    enabled: true
+  itemsLoadGenerator:
+    enabled: true
+
+components:
+  sourcePostgresql:
+    credentialsSecret:
+      name: lakehouse-items-db-app

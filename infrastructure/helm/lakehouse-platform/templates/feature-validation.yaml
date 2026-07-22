@@ -1,0 +1,125 @@
+{{/* Dependency and safety validation is evaluated before the implementation gate. */}}
+{{- if and .Values.features.itemsLoadGenerator.enabled (not .Values.features.sourcePostgresql.enabled) -}}
+{{- fail "features.itemsLoadGenerator requires features.sourcePostgresql" -}}
+{{- end -}}
+{{- if and .Values.features.sourcePostgresql.enabled (empty .Values.components.sourcePostgresql.credentialsSecret.name) -}}
+{{- fail "components.sourcePostgresql.credentialsSecret.name is required when features.sourcePostgresql is enabled" -}}
+{{- end -}}
+{{- if and .Values.features.sourcePostgresql.enabled (hasSuffix ":latest" .Values.components.sourcePostgresql.imageName) -}}
+{{- fail "components.sourcePostgresql.imageName must not use the latest tag" -}}
+{{- end -}}
+{{- if and .Values.features.itemsLoadGenerator.enabled (empty .Values.components.itemsLoadGenerator.image.digest) (eq .Values.components.itemsLoadGenerator.image.tag "latest") -}}
+{{- fail "components.itemsLoadGenerator.image.tag must not use latest unless an immutable digest is supplied" -}}
+{{- end -}}
+{{- if and .Values.features.systemLoadGenerator.enabled (not .Values.features.postgresql.enabled) -}}
+{{- fail "features.systemLoadGenerator requires features.postgresql" -}}
+{{- end -}}
+{{- if and .Values.features.systemLoadGenerator.enabled (not .Values.features.minio.enabled) -}}
+{{- fail "features.systemLoadGenerator requires features.minio" -}}
+{{- end -}}
+{{- if and .Values.features.flashSaleLoadGenerator.enabled (not .Values.features.cdcPostgresql.enabled) -}}
+{{- fail "features.flashSaleLoadGenerator requires features.cdcPostgresql" -}}
+{{- end -}}
+{{- if and .Values.features.minioClient.enabled (not .Values.features.minio.enabled) -}}
+{{- fail "features.minioClient requires features.minio" -}}
+{{- end -}}
+{{- if and .Values.features.icebergRest.enabled (not .Values.features.minio.enabled) -}}
+{{- fail "features.icebergRest requires features.minio" -}}
+{{- end -}}
+{{- if and .Values.features.spark.enabled (not .Values.features.minio.enabled) -}}
+{{- fail "features.spark requires features.minio" -}}
+{{- end -}}
+{{- if and .Values.features.spark.enabled (not .Values.features.icebergRest.enabled) -}}
+{{- fail "features.spark requires features.icebergRest" -}}
+{{- end -}}
+{{- if and .Values.features.trino.enabled (not .Values.features.minio.enabled) -}}
+{{- fail "features.trino requires features.minio" -}}
+{{- end -}}
+{{- if and .Values.features.trino.enabled (not .Values.features.icebergRest.enabled) -}}
+{{- fail "features.trino requires features.icebergRest" -}}
+{{- end -}}
+{{- if and .Values.features.kafkaSetup.enabled (not .Values.features.kafka.enabled) -}}
+{{- fail "features.kafkaSetup requires features.kafka" -}}
+{{- end -}}
+{{- if and .Values.features.schemaRegistry.enabled (not .Values.features.kafka.enabled) -}}
+{{- fail "features.schemaRegistry requires features.kafka" -}}
+{{- end -}}
+{{- if and .Values.features.kafkaConnect.enabled (not .Values.features.kafka.enabled) -}}
+{{- fail "features.kafkaConnect requires features.kafka" -}}
+{{- end -}}
+{{- if and .Values.features.kafkaConnect.enabled (not .Values.features.schemaRegistry.enabled) -}}
+{{- fail "features.kafkaConnect requires features.schemaRegistry" -}}
+{{- end -}}
+{{- if and .Values.features.connectorSetup.enabled (not .Values.features.kafkaConnect.enabled) -}}
+{{- fail "features.connectorSetup requires features.kafkaConnect" -}}
+{{- end -}}
+{{- if and .Values.features.connectorSetup.enabled (not .Values.features.cdcPostgresql.enabled) -}}
+{{- fail "features.connectorSetup requires features.cdcPostgresql" -}}
+{{- end -}}
+{{- if and .Values.features.connectorSetup.enabled (not .Values.features.openSearch.enabled) -}}
+{{- fail "features.connectorSetup requires features.openSearch" -}}
+{{- end -}}
+{{- if and .Values.features.loginLoadGenerator.enabled (not .Values.features.kafka.enabled) -}}
+{{- fail "features.loginLoadGenerator requires features.kafka" -}}
+{{- end -}}
+{{- if and .Values.features.loginLoadGenerator.enabled (not .Values.features.schemaRegistry.enabled) -}}
+{{- fail "features.loginLoadGenerator requires features.schemaRegistry" -}}
+{{- end -}}
+{{- if and .Values.features.redpandaConsole.enabled (not .Values.features.kafka.enabled) -}}
+{{- fail "features.redpandaConsole requires features.kafka" -}}
+{{- end -}}
+{{- if and .Values.features.redpandaConsole.enabled (not .Values.features.schemaRegistry.enabled) -}}
+{{- fail "features.redpandaConsole requires features.schemaRegistry" -}}
+{{- end -}}
+{{- if and .Values.features.flink.enabled (not .Values.features.kafka.enabled) -}}
+{{- fail "features.flink requires features.kafka" -}}
+{{- end -}}
+{{- if and .Values.features.flink.enabled (not .Values.features.schemaRegistry.enabled) -}}
+{{- fail "features.flink requires features.schemaRegistry" -}}
+{{- end -}}
+{{- if and .Values.features.clickhouse.enabled (not .Values.features.kafka.enabled) -}}
+{{- fail "features.clickhouse requires features.kafka" -}}
+{{- end -}}
+{{- if and .Values.features.clickhouse.enabled (not .Values.features.schemaRegistry.enabled) -}}
+{{- fail "features.clickhouse requires features.schemaRegistry" -}}
+{{- end -}}
+{{- if and .Values.features.streamlit.enabled (not .Values.features.clickhouse.enabled) -}}
+{{- fail "features.streamlit requires features.clickhouse" -}}
+{{- end -}}
+{{- if and .Values.features.streamlit.enabled (not .Values.features.postgresql.enabled) -}}
+{{- fail "features.streamlit requires features.postgresql" -}}
+{{- end -}}
+{{- if and .Values.features.superset.enabled (not .Values.features.trino.enabled) -}}
+{{- fail "features.superset requires features.trino" -}}
+{{- end -}}
+
+{{- $planned := dict
+  "postgresql" .Values.features.postgresql.enabled
+  "cdcPostgresql" .Values.features.cdcPostgresql.enabled
+  "systemLoadGenerator" .Values.features.systemLoadGenerator.enabled
+  "flashSaleLoadGenerator" .Values.features.flashSaleLoadGenerator.enabled
+  "minio" .Values.features.minio.enabled
+  "minioClient" .Values.features.minioClient.enabled
+  "icebergRest" .Values.features.icebergRest.enabled
+  "spark" .Values.features.spark.enabled
+  "trino" .Values.features.trino.enabled
+  "kafka" .Values.features.kafka.enabled
+  "kafkaSetup" .Values.features.kafkaSetup.enabled
+  "schemaRegistry" .Values.features.schemaRegistry.enabled
+  "kafkaConnect" .Values.features.kafkaConnect.enabled
+  "connectorSetup" .Values.features.connectorSetup.enabled
+  "loginLoadGenerator" .Values.features.loginLoadGenerator.enabled
+  "redpandaConsole" .Values.features.redpandaConsole.enabled
+  "flink" .Values.features.flink.enabled
+  "clickhouse" .Values.features.clickhouse.enabled
+  "openSearch" .Values.features.openSearch.enabled
+  "streamlit" .Values.features.streamlit.enabled
+  "superset" .Values.features.superset.enabled
+  "airflow" .Values.features.airflow.enabled
+  "mailhog" .Values.features.mailhog.enabled
+-}}
+{{- range $feature, $enabled := $planned -}}
+{{- if $enabled -}}
+{{- fail (printf "features.%s is planned but not implemented in Phase 2" $feature) -}}
+{{- end -}}
+{{- end -}}

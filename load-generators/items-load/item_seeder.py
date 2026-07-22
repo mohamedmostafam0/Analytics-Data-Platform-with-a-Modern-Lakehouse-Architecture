@@ -16,33 +16,53 @@ logger = logging.getLogger(__name__)
 # Initialize Faker
 fake = Faker()
 
-# Configuration
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
-POSTGRES_USER = os.getenv("POSTGRES_USER", "postgresuser")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgrespw")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "oneshop")
-
 CATEGORIES = ["widgets", "gadgets", "doodads", "clearance", "electronics", "home", "clothing"]
-ITEM_COUNT = 1000
 PRICE_MIN = 5.00
 PRICE_MAX = 500.00
 INVENTORY_MIN = 100
 INVENTORY_MAX = 5000
 MAX_RETRIES = 30
 RETRY_DELAY = 2
+SEED_MODES = {"skip-if-present", "append"}
+
+
+def required_env(name):
+    """Return a required environment value without supplying unsafe defaults."""
+    value = os.getenv(name)
+    if not value:
+        raise EnvironmentError(f"Missing required environment variable: {name}")
+    return value
+
+
+def get_seed_settings():
+    """Read and validate finite seed-job settings."""
+    item_count = int(os.getenv("ITEM_SEED_COUNT", "1000"))
+    if item_count <= 0:
+        raise ValueError("ITEM_SEED_COUNT must be greater than zero")
+
+    seed_mode = os.getenv("ITEM_SEED_MODE", "skip-if-present")
+    if seed_mode not in SEED_MODES:
+        raise ValueError(f"ITEM_SEED_MODE must be one of: {', '.join(sorted(SEED_MODES))}")
+
+    return item_count, seed_mode
 
 def get_db_connection():
     """Establish a database connection with retries."""
+    postgres_host = os.getenv("POSTGRES_HOST", "postgres")
+    postgres_port = os.getenv("POSTGRES_PORT", "5432")
+    postgres_user = required_env("POSTGRES_USER")
+    postgres_password = required_env("POSTGRES_PASSWORD")
+    postgres_db = os.getenv("POSTGRES_DB", "oneshop")
+
     retries = 0
     while retries < MAX_RETRIES:
         try:
             conn = psycopg2.connect(
-                host=POSTGRES_HOST,
-                port=POSTGRES_PORT,
-                dbname=POSTGRES_DB,
-                user=POSTGRES_USER,
-                password=POSTGRES_PASSWORD
+                host=postgres_host,
+                port=postgres_port,
+                dbname=postgres_db,
+                user=postgres_user,
+                password=postgres_password
             )
             logger.info("Successfully connected to PostgreSQL")
             return conn
@@ -54,7 +74,7 @@ def get_db_connection():
             logger.error(f"Unexpected error connecting to database: {e}")
             raise
             
-    raise Exception("Could not connect to database after multiple attempts")
+    raise ConnectionError("Could not connect to database after multiple attempts")
 
 def generate_item():
     """Generate a single random item."""
@@ -64,43 +84,55 @@ def generate_item():
     inventory = random.randint(INVENTORY_MIN, INVENTORY_MAX)
     return (name, category, price, inventory)
 
-def seed_items(conn):
-    """Seed items into the database."""
+def seed_items(conn, item_count, seed_mode):
+    """Seed items with transaction-scoped concurrency and explicit rerun semantics."""
+    cur = None
     try:
         cur = conn.cursor()
-        
-        # Schema is managed by postgres_bootstrap.sql
-        # We assume the table exists.
-        
+
+        # Serialize concurrent seeders before checking whether data already exists.
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("items-loadgen",))
+        cur.execute("SELECT count(*) FROM items")
+        existing_count = cur.fetchone()[0]
+
+        if existing_count > 0 and seed_mode == "skip-if-present":
+            conn.commit()
+            logger.info("Items already exist; skip-if-present mode made no changes.")
+            return 0
+
         # Generate data
-        items = [generate_item() for _ in range(ITEM_COUNT)]
-        
+        items = [generate_item() for _ in range(item_count)]
+
         # Bulk insert
         execute_values(
             cur,
             "INSERT INTO items (name, category, price, inventory) VALUES %s",
             items
         )
-        
+
         conn.commit()
-        logger.info(f"Successfully inserted {ITEM_COUNT} items.")
-        cur.close()
+        logger.info("Successfully inserted %s items.", item_count)
+        return item_count
     except Exception as e:
         logger.error(f"Error seeding items: {e}")
         conn.rollback()
         raise
+    finally:
+        if cur:
+            cur.close()
 
 def main():
     """Main execution function."""
     logger.info("Starting items-loadgen seeder...")
-    
+
     conn = None
     try:
+        item_count, seed_mode = get_seed_settings()
         conn = get_db_connection()
-        seed_items(conn)
+        seed_items(conn, item_count, seed_mode)
     except Exception as e:
         logger.error(f"Seeder failed: {e}")
-        exit(1)
+        raise SystemExit(1) from e
     finally:
         if conn:
             conn.close()

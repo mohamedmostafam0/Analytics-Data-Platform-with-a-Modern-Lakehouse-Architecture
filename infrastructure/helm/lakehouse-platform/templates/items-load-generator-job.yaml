@@ -1,0 +1,69 @@
+{{- if .Values.features.itemsLoadGenerator.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "lakehouse-platform.itemsJobName" . }}
+  namespace: {{ .Values.namespace.name | quote }}
+  labels:
+    {{- include "lakehouse-platform.itemsLabels" . | nindent 4 }}
+spec:
+  backoffLimit: {{ .Values.components.itemsLoadGenerator.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.components.itemsLoadGenerator.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: {{ .Values.components.itemsLoadGenerator.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "lakehouse-platform.itemsSelectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      terminationGracePeriodSeconds: 30
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: items-load-generator
+          image: {{ include "lakehouse-platform.itemsImage" . | quote }}
+          imagePullPolicy: {{ .Values.components.itemsLoadGenerator.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: POSTGRES_HOST
+              value: {{ printf "%s-rw" .Values.components.sourcePostgresql.clusterName | quote }}
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: {{ .Values.components.sourcePostgresql.database | quote }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.components.sourcePostgresql.credentialsSecret.name | quote }}
+                  key: {{ .Values.components.sourcePostgresql.credentialsSecret.usernameKey | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.components.sourcePostgresql.credentialsSecret.name | quote }}
+                  key: {{ .Values.components.sourcePostgresql.credentialsSecret.passwordKey | quote }}
+            - name: ITEM_SEED_COUNT
+              value: {{ .Values.components.itemsLoadGenerator.itemCount | quote }}
+            - name: ITEM_SEED_MODE
+              value: {{ .Values.components.itemsLoadGenerator.seedMode | quote }}
+          resources:
+            {{- toYaml .Values.components.itemsLoadGenerator.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}
