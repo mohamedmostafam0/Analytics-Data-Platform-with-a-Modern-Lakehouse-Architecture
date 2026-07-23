@@ -62,8 +62,9 @@
     "components": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sourcePostgresql", "itemsLoadGenerator"],
+      "required": ["postgresql", "sourcePostgresql", "itemsLoadGenerator", "minio", "minioClient"],
       "properties": {
+        "postgresql": {"$ref": "#/definitions/postgresqlComponent"},
         "sourcePostgresql": {
           "type": "object",
           "additionalProperties": false,
@@ -121,11 +122,106 @@
             "ttlSecondsAfterFinished": {"type": "integer", "minimum": 60, "maximum": 86400},
             "resources": {"$ref": "#/definitions/resources"}
           }
+        },
+        "minio": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["image", "credentialsSecret", "apiPort", "consolePort", "storage", "resources"],
+          "properties": {
+            "image": {"$ref": "#/definitions/image"},
+            "credentialsSecret": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "usernameKey", "passwordKey"],
+              "properties": {
+                "name": {"type": "string", "maxLength": 253},
+                "usernameKey": {"type": "string", "const": "rootUser"},
+                "passwordKey": {"type": "string", "const": "rootPassword"}
+              }
+            },
+            "apiPort": {"type": "integer", "minimum": 1024, "maximum": 65535},
+            "consolePort": {"type": "integer", "minimum": 1024, "maximum": 65535},
+            "storage": {"$ref": "#/definitions/storage"},
+            "resources": {"$ref": "#/definitions/resources"}
+          }
+        },
+        "minioClient": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["image", "buckets", "persistenceMarker", "backoffLimit", "activeDeadlineSeconds", "ttlSecondsAfterFinished", "resources"],
+          "properties": {
+            "image": {"$ref": "#/definitions/image"},
+            "buckets": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 3, "maxLength": 63, "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$"}
+            },
+            "persistenceMarker": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["bucket", "object"],
+              "properties": {
+                "bucket": {"type": "string", "minLength": 3, "maxLength": 63},
+                "object": {"type": "string", "minLength": 1, "maxLength": 512}
+              }
+            },
+            "backoffLimit": {"type": "integer", "minimum": 0, "maximum": 6},
+            "activeDeadlineSeconds": {"type": "integer", "minimum": 30, "maximum": 3600},
+            "ttlSecondsAfterFinished": {"type": "integer", "minimum": 60, "maximum": 86400},
+            "resources": {"$ref": "#/definitions/resources"}
+          }
         }
       }
     }
   },
   "definitions": {
+    "postgresqlComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clusterName", "operatorNamespace", "imageName", "imagePullPolicy", "instances", "database", "owner", "credentialsSecret", "storage", "resources"],
+      "properties": {
+        "clusterName": {"$ref": "#/definitions/kubernetesName"},
+        "operatorNamespace": {"$ref": "#/definitions/kubernetesName"},
+        "imageName": {"type": "string", "minLength": 1},
+        "imagePullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]},
+        "instances": {"type": "integer", "const": 1},
+        "database": {"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z_][a-z0-9_]*$"},
+        "owner": {"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z_][a-z0-9_]*$"},
+        "credentialsSecret": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "usernameKey", "passwordKey"],
+          "properties": {
+            "name": {"type": "string", "maxLength": 253},
+            "usernameKey": {"type": "string", "const": "username"},
+            "passwordKey": {"type": "string", "const": "password"}
+          }
+        },
+        "storage": {"$ref": "#/definitions/storage"},
+        "resources": {"$ref": "#/definitions/resources"}
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "digest", "pullPolicy"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "pattern": "^$|^sha256:[0-9a-f]{64}$"},
+        "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size", "storageClass"],
+      "properties": {
+        "size": {"type": "string", "minLength": 2},
+        "storageClass": {"type": "string"}
+      }
+    },
     "featureToggle": {
       "type": "object",
       "additionalProperties": false,

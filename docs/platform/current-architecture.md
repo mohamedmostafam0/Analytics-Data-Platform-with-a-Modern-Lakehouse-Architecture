@@ -39,6 +39,16 @@ No Prometheus, Grafana, Alertmanager, log collector, OpenSearch Dashboards,
 Kubernetes, Helm, Kustomize, or CI/CD definition existed at discovery time.
 OpenSearch currently receives item documents; it is not a centralized log system.
 
+## Kubernetes migration overlay
+
+Compose remains the current full-platform architecture. The accepted Kubernetes
+overlay is deliberately smaller: Phase 2 has a hibernated source CloudNativePG
+Cluster and finite item Job; Phase 3A adds a separate hibernated main CloudNativePG
+Cluster plus local-only MinIO compatibility StatefulSet and private-bucket Job.
+Each uses retained PVCs and separate Helm releases. Kafka, catalog, processing,
+query, visualization, observability, and logging workloads remain disabled. See
+the migration plan and ADR-008 for the acceptance boundary and artifact lifecycle.
+
 ## Data paths
 
 ### Batch lakehouse

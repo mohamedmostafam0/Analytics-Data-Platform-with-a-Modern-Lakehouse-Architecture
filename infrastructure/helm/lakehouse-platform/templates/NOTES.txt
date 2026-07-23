@@ -2,13 +2,18 @@ Lakehouse platform rendered for profile {{ .Values.global.profile | quote }}.
 
 Namespace creation: {{ .Values.namespace.create }}
 Namespace name: {{ .Values.namespace.name }}
-{{- if and .Values.features.sourcePostgresql.enabled .Values.features.itemsLoadGenerator.enabled }}
+{{- if and .Values.features.postgresql.enabled .Values.features.minio.enabled }}
+
+Phase 3A enables main PostgreSQL and local S3-compatible storage.
+The required database and object-storage Secrets are referenced but never created.
+Install this profile as a separate release from the retained Phase 2 slice.
+{{- else if and .Values.features.sourcePostgresql.enabled .Values.features.itemsLoadGenerator.enabled }}
 
 Phase 2 enables the disposable source PostgreSQL Cluster and finite item-seeding Job.
 The required Secret is referenced but never created by this chart.
 {{- else }}
 
-No Phase 2 workload is enabled in this render.
+No migrated workload is enabled in this render.
 {{- end }}
 
 Read docs/plans/kubernetes-migration.md before enabling another phase.

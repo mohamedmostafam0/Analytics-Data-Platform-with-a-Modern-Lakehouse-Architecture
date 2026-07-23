@@ -5,7 +5,7 @@ metadata:
   labels:
     app.kubernetes.io/name: lakehouse-platform
     app.kubernetes.io/instance: lakehouse-platform
-    app.kubernetes.io/version: phase-2
+    app.kubernetes.io/version: phase-3a
     app.kubernetes.io/component: platform-foundation
     app.kubernetes.io/part-of: lakehouse-platform
     app.kubernetes.io/managed-by: kubectl

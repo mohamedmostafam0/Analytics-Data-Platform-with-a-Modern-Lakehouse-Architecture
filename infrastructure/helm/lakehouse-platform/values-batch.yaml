@@ -1,2 +1,18 @@
 global:
   profile: batch
+
+features:
+  postgresql:
+    enabled: true
+  minio:
+    enabled: true
+  minioClient:
+    enabled: true
+
+components:
+  postgresql:
+    credentialsSecret:
+      name: lakehouse-main-db-app
+  minio:
+    credentialsSecret:
+      name: lakehouse-minio-root

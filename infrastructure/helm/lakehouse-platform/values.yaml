@@ -65,6 +65,28 @@ features:
     enabled: false
 
 components:
+  postgresql:
+    clusterName: platform-postgresql
+    operatorNamespace: cnpg-system
+    imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie@sha256:4e4ac3fb2c914cfb44f80f0b8be8aa550e83b80bf5220df49c3a8780c1f79bc8
+    imagePullPolicy: IfNotPresent
+    instances: 1
+    database: oneshop
+    owner: platform_app
+    credentialsSecret:
+      name: ""
+      usernameKey: username
+      passwordKey: password
+    storage:
+      size: 2Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 150m
+        memory: 384Mi
+      limits:
+        cpu: "1"
+        memory: 1536Mi
   sourcePostgresql:
     clusterName: items-postgresql
     operatorNamespace: cnpg-system
@@ -104,4 +126,49 @@ components:
         memory: 32Mi
       limits:
         cpu: 250m
+        memory: 128Mi
+  minio:
+    image:
+      repository: lakehouse/minio
+      tag: phase3a-RELEASE.2025-10-15T17-29-55Z
+      digest: ""
+      pullPolicy: Never
+    credentialsSecret:
+      name: ""
+      usernameKey: rootUser
+      passwordKey: rootPassword
+    apiPort: 9000
+    consolePort: 9001
+    storage:
+      size: 2Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 750m
+        memory: 768Mi
+  minioClient:
+    image:
+      repository: lakehouse/minio-client
+      tag: phase3a-RELEASE.2025-08-13T08-35-41Z
+      digest: ""
+      pullPolicy: Never
+    buckets:
+      - warehouse
+      - pageviews
+      - postgres-backups
+    persistenceMarker:
+      bucket: warehouse
+      object: .phase3a/persistence-marker.txt
+    backoffLimit: 4
+    activeDeadlineSeconds: 300
+    ttlSecondsAfterFinished: 1800
+    resources:
+      requests:
+        cpu: 20m
+        memory: 32Mi
+      limits:
+        cpu: 200m
         memory: 128Mi

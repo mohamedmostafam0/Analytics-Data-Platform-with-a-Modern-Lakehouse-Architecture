@@ -296,9 +296,9 @@ services:
     healthcheck: unknown
     startup_command: configure alias, create warehouse/pageviews, grant anonymous warehouse access, tail forever
     estimated_resource_class: tiny
-    kubernetes_strategy: job
+    kubernetes_strategy: finite_idempotent_job
     proposed_migration_phase: 3
-    notes: Entire root .env is injected; command intentionally keeps container alive.
+    notes: "Compose injects the entire root .env and keeps the container alive. Phase 3A uses an external Secret, finite rerunnable Job, private warehouse/pageviews/postgres-backups buckets, and a persistence marker."
 
   minio:
     source_compose_file: docker-compose.yaml
@@ -320,9 +320,9 @@ services:
     healthcheck: "curl -f http://localhost:9000/minio/health/live"
     startup_command: minio server /data --console-address :9001
     estimated_resource_class: medium
-    kubernetes_strategy: operator_or_maintained_chart
+    kubernetes_strategy: local_compatibility_statefulset_or_supported_external_s3
     proposed_migration_phase: 3
-    notes: Entire root .env is injected and transport is HTTP.
+    notes: "Compose injects the entire root .env and uses HTTP. Phase 3A builds the fixed archived source only for local S3 compatibility; production requires supported object storage."
 
   opensearch:
     source_compose_file: docker-compose.yaml
@@ -368,9 +368,9 @@ services:
     healthcheck: "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
     startup_command: image default (unknown)
     estimated_resource_class: medium
-    kubernetes_strategy: operator_or_maintained_chart
+    kubernetes_strategy: cloudnativepg_operator
     proposed_migration_phase: 3
-    notes: Entire root .env is injected; no data volume; bootstrap contains a tracked development password literal.
+    notes: "Compose injects the entire root .env, has no data volume, and mounts a bootstrap with a development password. Phase 3A uses an external Secret, separate credential-free bootstrap, pgvector standard image, retained PVC, and restore test."
 
   redpanda-console:
     source_compose_file: docker-compose.yaml
@@ -440,9 +440,9 @@ services:
     healthcheck: unknown
     startup_command: image default (unknown)
     estimated_resource_class: small
-    kubernetes_strategy: evaluate_catalog_service_or_deployment
+    kubernetes_strategy: apache_polaris_helm_chart_after_integration_gate
     proposed_migration_phase: 3
-    notes: Entire root .env is injected; persistence and production suitability are unknown.
+    notes: "Compose injects the entire root .env; fixture persistence and production suitability are unknown. ADR-008 selects Apache Polaris 1.6.0, with authenticated JDBC deployment deferred."
 
   spark-iceberg:
     source_compose_file: docker-compose.yaml

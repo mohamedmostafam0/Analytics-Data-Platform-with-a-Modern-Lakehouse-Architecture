@@ -1,0 +1,91 @@
+{{- if and .Values.features.minio.enabled .Values.features.minioClient.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "lakehouse-platform.minioClientJobName" . }}
+  namespace: {{ .Values.namespace.name | quote }}
+  labels:
+    {{- include "lakehouse-platform.minioClientLabels" . | nindent 4 }}
+spec:
+  backoffLimit: {{ .Values.components.minioClient.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.components.minioClient.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: {{ .Values.components.minioClient.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "lakehouse-platform.minioClientSelectorLabels" . | nindent 8 }}
+        app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+        app.kubernetes.io/part-of: "lakehouse-platform"
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap
+          image: {{ include "lakehouse-platform.minioClientImage" . | quote }}
+          imagePullPolicy: {{ .Values.components.minioClient.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              attempts=0
+              until mc alias set local "${MINIO_ENDPOINT}" "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1; do
+                attempts=$((attempts + 1))
+                if [ "$attempts" -ge 60 ]; then
+                  echo "ERROR: object storage was not ready after 120 seconds." >&2
+                  exit 1
+                fi
+                sleep 2
+              done
+              {{- range .Values.components.minioClient.buckets }}
+              mc mb --ignore-existing "local/{{ . }}"
+              mc anonymous set none "local/{{ . }}" >/dev/null
+              {{- end }}
+              marker="local/{{ .Values.components.minioClient.persistenceMarker.bucket }}/{{ .Values.components.minioClient.persistenceMarker.object }}"
+              if mc stat "$marker" >/dev/null 2>&1; then
+                echo "Retained existing Phase 3A persistence marker."
+              else
+                printf '%s' 'phase3a-persistence-marker' | mc pipe "$marker" >/dev/null
+                echo "Created Phase 3A persistence marker."
+              fi
+              mc stat "$marker" >/dev/null
+              echo "Private object-storage buckets are ready."
+          env:
+            - name: HOME
+              value: /tmp
+            - name: MC_CONFIG_DIR
+              value: /tmp/.mc
+            - name: MINIO_ENDPOINT
+              value: {{ printf "http://%s:%d" (include "lakehouse-platform.minioName" .) (.Values.components.minio.apiPort | int) | quote }}
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.components.minio.credentialsSecret.name | quote }}
+                  key: {{ .Values.components.minio.credentialsSecret.usernameKey | quote }}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.components.minio.credentialsSecret.name | quote }}
+                  key: {{ .Values.components.minio.credentialsSecret.passwordKey | quote }}
+          resources:
+            {{- toYaml .Values.components.minioClient.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: temporary
+              mountPath: /tmp
+      volumes:
+        - name: temporary
+          emptyDir:
+            sizeLimit: 32Mi
+{{- end }}

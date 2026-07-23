@@ -13,3 +13,4 @@ use the next numeric prefix and link back to the migration plan when relevant.
 | [005](005-secrets-management-strategy.md) | Accepted | Secret references now; external management later |
 | [006](006-first-vertical-slice.md) | Accepted | PostgreSQL-backed item seeding slice |
 | [007](007-local-kubernetes-distribution.md) | Accepted | kind for the disposable local cluster |
+| [008](008-phase3a-storage-and-catalog-strategy.md) | Accepted | Split Phase 3A storage, local S3 compatibility, and Polaris direction |

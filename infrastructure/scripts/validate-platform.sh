@@ -162,9 +162,9 @@ else
   skip "markdownlint is not installed"
 fi
 
-stage "Phase 2 safety assertions"
+stage "Migration safety assertions"
 if grep -R -n -E '^[[:space:]]*kind:[[:space:]]*Secret[[:space:]]*$' infrastructure; then
-  echo "ERROR: Phase 2 must not commit Kubernetes Secret objects." >&2
+  echo "ERROR: migration infrastructure must not commit Kubernetes Secret objects." >&2
   exit 1
 fi
 if grep -R -n -E '^[[:space:]]*image:[^#]*(latest|:[[:space:]]*$)' infrastructure; then
@@ -179,7 +179,12 @@ if ! git check-ignore -q .env; then
   echo "ERROR: .env must remain ignored." >&2
   exit 1
 fi
-echo "No Secret object or latest image reference was introduced; .env remains untracked and ignored."
+fixture_password='etl''password'
+if grep -R -n -F "$fixture_password" infrastructure/helm infrastructure/kubernetes infrastructure/scripts; then
+  echo "ERROR: the Compose-only fixture password must not appear in Kubernetes assets." >&2
+  exit 1
+fi
+echo "No Secret object, latest image, or Compose fixture credential was introduced; .env remains untracked and ignored."
 
 stage "Validation complete"
 echo "Static validation passed. No container, service, or Kubernetes resource was started or applied."

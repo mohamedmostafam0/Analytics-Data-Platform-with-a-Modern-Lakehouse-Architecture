@@ -44,6 +44,8 @@ See the service inventory and dependency map for evidence.
 - [ADR-005](../adr/005-secrets-management-strategy.md): Secret references only.
 - [ADR-006](../adr/006-first-vertical-slice.md): accepted item-seeding slice.
 - [ADR-007](../adr/007-local-kubernetes-distribution.md): kind for local Phase 2.
+- [ADR-008](../adr/008-phase3a-storage-and-catalog-strategy.md): bounded Phase 3A
+  storage, development-only MinIO compatibility, and Apache Polaris direction.
 
 ## Milestones and phases
 
@@ -87,7 +89,7 @@ approval.
 
 ### Phase 2: First lightweight vertical slice
 
-Status: implemented and runtime-accepted on 2026-07-22; waiting at the Phase 3 gate.
+Status: implemented and runtime-accepted on 2026-07-22.
 
 Scope: migrate `items-loadgen` as a finite Job and one disposable CloudNativePG
 development Cluster. Use kind `v0.31.0`/Kubernetes `v1.35.0`, CloudNativePG
@@ -116,16 +118,29 @@ decision.
 
 ### Phase 3: Core storage and messaging
 
-Status: planned.
+Status: Phase 3A implemented and runtime-accepted by 2026-07-23; Phase 3B is
+planned and not approved.
 
-Candidate scope: main PostgreSQL, MinIO/bootstrap, Iceberg catalog decision, Kafka,
-Schema Registry, Kafka Connect/connector Jobs, CDC PostgreSQL, generators, and
-Redpanda Console. Each remains separately optional. Split the phase into storage
-and messaging releases if resource testing warrants it.
+Phase 3A storage scope: main PostgreSQL, local S3-compatible MinIO/bootstrap, and
+the Iceberg catalog decision. The `batch` overlay enables only these storage
+resources in a separate `lakehouse-storage` Helm release. Main PostgreSQL reuses
+CloudNativePG with a digest-pinned standard PostgreSQL 18.4/pgvector image. Because
+upstream MinIO is archived and its last fixed release has no community container,
+the local compatibility image is reproducibly built from that exact source and is
+explicitly not a production recommendation. Apache Polaris 1.6.0 is selected as
+the maintained catalog direction, but its authenticated persistent deployment is
+deferred to a bounded catalog integration sub-slice.
 
-Acceptance: pinned maintained artifacts, backup/restore evidence, persistent
-storage ownership, authentication, NetworkPolicy design, topic/connector
-idempotency, replay checks, and profile-scoped smoke tests.
+Phase 3A acceptance: external Secret references, explicit resources, private
+buckets, NetworkPolicies, retained PVC ownership, idempotent bootstrap, PostgreSQL
+logical backup/restore, database and object persistence across restart/hibernation,
+profile-scoped smoke tests, and unchanged Phase 2 PVC identity.
+
+Phase 3B messaging candidate scope: Kafka, Schema Registry, Kafka Connect and
+connector Jobs, CDC PostgreSQL, generators, and Redpanda Console. Each remains
+separately optional. Acceptance additionally requires topic/connector idempotency,
+replay checks, broker storage recovery, bounded generators, and a separate laptop
+resource gate.
 
 ### Phase 4: Orchestration and processing
 
@@ -273,11 +288,17 @@ cleanup is part of an automated validation or rollback command.
 - [x] Begin Phase 2.
 - [x] Add the hardened item Job, CNPG Cluster, bootstrap, policies, and local lifecycle scripts.
 - [x] Complete image build, kind runtime smoke/rerun, and hibernation validation.
+- [x] Receive explicit approval to begin Phase 3.
+- [x] Split Phase 3A storage from Phase 3B messaging.
+- [x] Select pinned PostgreSQL/MinIO build artifacts and the Polaris catalog direction.
+- [x] Add Phase 3A chart resources, image builds, Secret/lifecycle helpers, and static tests.
+- [x] Complete Phase 3A image and runtime persistence/recovery validation.
 
 ## Unresolved questions
 
-1. Is the CDC PostgreSQL image compatible with the shared pgvector bootstrap, or
-   should the schema/bootstrap be separated?
+1. Which CDC PostgreSQL image/extension strategy should replace the incompatible
+   shared bootstrap? The main PostgreSQL bootstrap is now separate, but Phase 3B
+   must decide the CDC image before deployment.
 2. Which existing tracked credential literals may be removed/rotated without
    breaking the user's Compose workflow?
 3. What durability is intended for the current ephemeral PostgreSQL, ClickHouse,
@@ -313,8 +334,48 @@ cleanup is part of an automated validation or rollback command.
   assertions, and kubectl client dry-run. `kubeconform`, `yamllint`, `shellcheck`,
   and `markdownlint` were unavailable and explicitly skipped.
 
+### Phase 3A validation record (2026-07-22 to 2026-07-23)
+
+- Built MinIO from checksum-pinned final fixed source commit
+  `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a` with the pinned Go 1.24.8 and
+  distroless inputs. The version check reported
+  `RELEASE.2025-10-15T17-29-55Z`; the loaded image ID was
+  `sha256:30f2f7909be49e9b42d72a79326b4b1e0e85c81fbd2c412142c4afcff1870bbb`.
+- Checksum-verified `mc` `RELEASE.2025-08-13T08-35-41Z`; its loaded image ID
+  was `sha256:285ede5f7d5be5ad09c2493f62173e67c194b7930488cf471c11987b0cd5d878`.
+- The API server accepted all eight namespace-scoped Phase 3A objects in server
+  dry-run. The `batch` profile renders nine resources including the optional
+  Namespace; disabled profiles and invalid combinations passed their assertions.
+  NetworkPolicy enforcement was not claimed because an enforcing CNI and explicit
+  allowed/denied traffic matrix were outside this local cluster's validation.
+- Generated two local Secret objects without logging values. The main database
+  reached Ready on the digest-pinned PostgreSQL 18.4 standard image. Runtime SQL
+  confirmed pgvector, `users`, `items`, `purchases`, `reviews`, and exactly 13
+  review fixtures.
+- A custom-format logical dump restored into a temporary database; all four table
+  row counts matched before the temporary database was force-dropped. This proves
+  logical recovery for the development fixture, not WAL/PITR or a production RPO.
+- The finite client created private `warehouse`, `pageviews`, and
+  `postgres-backups` buckets. After MinIO pod recreation, the same PVC UID and
+  existing marker were observed; the rerun reported retained rather than created.
+- Hibernation removed both Phase 3A stateful pods while retaining two bound 2 GiB
+  PVCs. Resume preserved PostgreSQL counts, then the slice was hibernated again.
+  The retained Phase 2 1 GiB PVC UID was identical before and after the test.
+- A repeat run from the hibernated state exposed CNPG's stale pre-resume Ready
+  condition. The helper now waits for the actual primary Pod and Pod readiness;
+  the complete restore/restart/hibernate smoke passed again with that fix.
+- Full static validation passed both Compose models, inventory/schema, eight Helm
+  profiles, feature tests, Bash/Python syntax, Secret/latest/fixture-credential
+  assertions, and kubectl client dry-run. `kubeconform`, `yamllint`, `shellcheck`,
+  and `markdownlint` remain unavailable and were explicitly skipped; API-server
+  dry-run and live acceptance cover the deployed Kubernetes schemas.
+- `trivy`, `grype`, `syft`, and Docker Scout were unavailable, so no local image
+  CVE/SBOM scan was claimed. Source/release checksums, immutable base images, Go
+  module sums, non-root runtime checks, and the upstream security-fix selection
+  provide supply-chain controls but do not replace a scanner.
+
 ## Next approved action
 
-Stop. Phase 2 is accepted and hibernated. Do not begin Phase 3, resume the database,
-or delete the disposable cluster/PVC until the user explicitly chooses the next
-action.
+Stop. Phase 3A is accepted and hibernated with all three Phase 2/3A PVCs retained.
+Do not begin Phase 3B, deploy Polaris/Spark, uninstall either Helm release, or
+delete the kind cluster/PVCs without another explicit approval.

@@ -2,10 +2,10 @@ apiVersion: v2
 name: lakehouse-platform
 description: Foundation and feature policy for the phased lakehouse Kubernetes migration
 type: application
-version: 0.2.0
-appVersion: "phase-2"
+version: 0.3.0
+appVersion: "phase-3a"
 home: https://github.com/mohamedmostafam0/Analytics-Data-Platform-with-a-Modern-Lakehouse-Architecture
 sources:
   - https://github.com/mohamedmostafam0/Analytics-Data-Platform-with-a-Modern-Lakehouse-Architecture
 annotations:
-  platform.lakehouse/migration-phase: "2"
+  platform.lakehouse/migration-phase: "3a"

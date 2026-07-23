@@ -1,0 +1,83 @@
+{{- if .Values.features.postgresql.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-main-postgresql-ingress" (include "lakehouse-platform.fullname" .) | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Values.namespace.name | quote }}
+  labels:
+    {{- include "lakehouse-platform.postgresqlLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "lakehouse-platform.postgresqlSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.components.postgresql.operatorNamespace | quote }}
+      ports:
+        - protocol: TCP
+          port: 8000
+{{- end }}
+{{- if .Values.features.minio.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-minio-ingress" (include "lakehouse-platform.fullname" .) | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Values.namespace.name | quote }}
+  labels:
+    {{- include "lakehouse-platform.minioLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "lakehouse-platform.minioSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "lakehouse-platform.minioClientSelectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.components.minio.apiPort }}
+{{- end }}
+{{- if and .Values.features.minio.enabled .Values.features.minioClient.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-minio-client-egress" (include "lakehouse-platform.fullname" .) | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Values.namespace.name | quote }}
+  labels:
+    {{- include "lakehouse-platform.minioClientLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "lakehouse-platform.minioClientSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: "kube-system"
+          podSelector:
+            matchLabels:
+              k8s-app: "kube-dns"
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "lakehouse-platform.minioSelectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.components.minio.apiPort }}
+{{- end }}

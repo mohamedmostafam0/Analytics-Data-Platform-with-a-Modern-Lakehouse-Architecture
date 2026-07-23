@@ -1,0 +1,18 @@
+{{- if .Values.features.minio.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lakehouse-platform.minioName" . }}
+  namespace: {{ .Values.namespace.name | quote }}
+  labels:
+    {{- include "lakehouse-platform.minioLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "lakehouse-platform.minioSelectorLabels" . | nindent 4 }}
+  ports:
+    - name: api
+      protocol: TCP
+      port: {{ .Values.components.minio.apiPort }}
+      targetPort: api
+{{- end }}

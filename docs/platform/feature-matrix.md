@@ -1,24 +1,24 @@
 # Kubernetes feature matrix
 
-## Phase 2 behavior
+## Phase 3A behavior
 
 All component flags default to false, so base values remain namespace-only. The
 `minimal` overlay opts into the approved `sourcePostgresql` and
-`itemsLoadGenerator` slice; it renders the namespace, database bootstrap, one
-CloudNativePG Cluster, one finite Job, and two NetworkPolicies. All later features
-remain locked by the Phase 2 implementation gate.
+`itemsLoadGenerator` Phase 2 slice. The `batch` overlay opts into the main
+PostgreSQL, MinIO, and finite private-bucket bootstrap slice in a separate release.
+All later features remain locked by the Phase 3A implementation gate.
 
 | Feature | Default | Target profiles | Dependencies enforced | Conflicts/advisories | Config | Validation | Phase |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `postgresql` | off | batch, analytics | none | stateful | `features.postgresql.enabled` | phase gate | 3 |
+| `postgresql` | off | batch, analytics | external Secret | singleton stateful development database | `features.postgresql.enabled` | render + restore/hibernate smoke | 3A |
 | `sourcePostgresql` | off | minimal | external Secret | singleton development database | `features.sourcePostgresql.enabled` | rendered + runtime smoke | 2 |
 | `cdcPostgresql` | off | ingestion | none | stateful/WAL source | `features.cdcPostgresql.enabled` | phase gate | 3 |
 | `itemsLoadGenerator` | off | minimal | `sourcePostgresql` | finite; skip existing by default | `features.itemsLoadGenerator.enabled` | dependency + unit/render/runtime smoke | 2 |
 | `systemLoadGenerator` | off | batch | `postgresql`, `minio` | high data volume | `features.systemLoadGenerator.enabled` | dependency + phase gate | 4 |
 | `flashSaleLoadGenerator` | off | ingestion | `cdcPostgresql` | continuous writer | `features.flashSaleLoadGenerator.enabled` | dependency + phase gate | 3 |
-| `minio` | off | batch, analytics | none | stateful | `features.minio.enabled` | phase gate | 3 |
-| `minioClient` | off | batch, analytics | `minio` | setup Job | `features.minioClient.enabled` | dependency + phase gate | 3 |
-| `icebergRest` | off | batch, analytics | `minio` | fixture image needs review | `features.icebergRest.enabled` | dependency + phase gate | 3 |
+| `minio` | off | batch, analytics | external Secret | archived upstream; local compatibility only | `features.minio.enabled` | render + restart/hibernate persistence smoke | 3A |
+| `minioClient` | off | batch, analytics | `minio` | finite private-bucket Job | `features.minioClient.enabled` | dependency + private/idempotent runtime smoke | 3A |
+| `icebergRest` | off | batch, analytics | `minio` | Polaris selected; deployment deferred | `features.icebergRest.enabled` | dependency + phase gate | 3A decision |
 | `spark` | off | batch | `minio`, `icebergRest` | very large | `features.spark.enabled` | dependency + phase gate | 4 |
 | `trino` | off | analytics | `minio`, `icebergRest` | large | `features.trino.enabled` | dependency + phase gate | 5 |
 | `kafka` | off | ingestion, streaming | none | stateful/large | `features.kafka.enabled` | phase gate | 3 |

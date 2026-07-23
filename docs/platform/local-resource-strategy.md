@@ -7,15 +7,16 @@ continuous behavior, JVM heap settings, and dependency count. They are not measu
 CPU or memory claims because Compose defines no resource limits and no full stack
 was started.
 
-Base Helm values enable no workload. In Phase 2, only the `minimal` overlay enables
-a runtime slice; all other service lists remain target membership for later phases.
+Base Helm values enable no workload. The `minimal` overlay enables only the
+hibernatable Phase 2 slice. In Phase 3A, the `batch` overlay enables only its
+storage foundation; the larger batch target remains deferred.
 
 | Profile | Target enabled services | Required | Optional | Relative class | Purpose and validation |
 | --- | --- | --- | --- | --- | --- |
 | `minimal` | single-instance CloudNativePG source, one-shot `items-loadgen` | both | none | small to medium | Implemented in Phase 2; seed 100 rows, rerun without growth, then optionally hibernate PostgreSQL. |
 | `ingestion` | `debezium-postgres`, `items-loadgen`, `kafka`, `schema-registry`, `connect`, `connector-setup`, `opensearch` | all for item CDC search | `flashsale-loadgen`, `redpanda-console` | large | Prove WAL-to-search CDC; validate connector/task status and indexed records. |
 | `streaming` | `kafka`, `kafka-setup`, `schema-registry`, `login-loadgen`, `jobmanager`, `taskmanager` | all | `redpanda-console` | large | Prove Avro login enrichment/anomalies; validate topics, submitted Flink jobs, and bounded state. |
-| `batch` | `postgres`, `minio`, `mc`, `rest`, `spark-iceberg`, `loadgen` | storage/catalog/Spark plus input data | Airflow stack | very large | Prove Bronze/Silver/Gold ETL; use small fixture counts and table assertions. |
+| `batch` | Current: main CloudNativePG, local MinIO, finite `mc` Job. Deferred: Polaris, Spark, `loadgen` | current storage trio | catalog/processing/Airflow later | medium now; very large at target | Phase 3A validates schema, restore, private buckets, object persistence, and hibernation. It does not run ETL. |
 | `analytics` | `minio`, `rest`, `trino`, `superset`, `superset-db` | first three for queries | Superset UI; ClickHouse/Streamlit branch with its ingestion dependencies | large to very large | Query existing Iceberg data; avoid generating and processing data simultaneously. |
 | `observability` | none currently | unknown | unknown | unknown | Reserved for Phase 6 after an actual metrics stack is selected; only static config validation is possible now. |
 | `logging` | `opensearch` is the only existing backend | collector and dashboard are missing | none | large | Reserved for Phase 7; OpenSearch currently stores item search data, not logs. |
@@ -62,3 +63,11 @@ Before runtime work on 2026-07-22, the host exposed 20 CPUs, about 30 GiB RAM
 CPU/256 MiB for PostgreSQL and 25m CPU/32 MiB for the finite Job; limits are 1
 CPU/1 GiB and 250m CPU/128 MiB respectively. These are development guardrails,
 not production sizing evidence.
+
+## Phase 3A guardrails
+
+The storage overlay adds 150m CPU/384 MiB requested for the main PostgreSQL and
+100m CPU/256 MiB for MinIO; the finite client Job requests 20m CPU/32 MiB. It uses
+two 2 GiB PVCs. Runtime testing keeps the Phase 2 database hibernated, does not
+start messaging or processing, and hibernates Phase 3A after acceptance. These are
+development guardrails rather than production sizing or availability evidence.

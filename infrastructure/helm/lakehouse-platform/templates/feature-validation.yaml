@@ -8,6 +8,21 @@
 {{- if and .Values.features.sourcePostgresql.enabled (hasSuffix ":latest" .Values.components.sourcePostgresql.imageName) -}}
 {{- fail "components.sourcePostgresql.imageName must not use the latest tag" -}}
 {{- end -}}
+{{- if and .Values.features.postgresql.enabled (empty .Values.components.postgresql.credentialsSecret.name) -}}
+{{- fail "components.postgresql.credentialsSecret.name is required when features.postgresql is enabled" -}}
+{{- end -}}
+{{- if and .Values.features.postgresql.enabled (hasSuffix ":latest" .Values.components.postgresql.imageName) -}}
+{{- fail "components.postgresql.imageName must not use the latest tag" -}}
+{{- end -}}
+{{- if and .Values.features.minio.enabled (empty .Values.components.minio.credentialsSecret.name) -}}
+{{- fail "components.minio.credentialsSecret.name is required when features.minio is enabled" -}}
+{{- end -}}
+{{- if and .Values.features.minio.enabled (empty .Values.components.minio.image.digest) (eq .Values.components.minio.image.tag "latest") -}}
+{{- fail "components.minio.image.tag must not use latest unless an immutable digest is supplied" -}}
+{{- end -}}
+{{- if and .Values.features.minioClient.enabled (empty .Values.components.minioClient.image.digest) (eq .Values.components.minioClient.image.tag "latest") -}}
+{{- fail "components.minioClient.image.tag must not use latest unless an immutable digest is supplied" -}}
+{{- end -}}
 {{- if and .Values.features.itemsLoadGenerator.enabled (empty .Values.components.itemsLoadGenerator.image.digest) (eq .Values.components.itemsLoadGenerator.image.tag "latest") -}}
 {{- fail "components.itemsLoadGenerator.image.tag must not use latest unless an immutable digest is supplied" -}}
 {{- end -}}
@@ -22,6 +37,15 @@
 {{- end -}}
 {{- if and .Values.features.minioClient.enabled (not .Values.features.minio.enabled) -}}
 {{- fail "features.minioClient requires features.minio" -}}
+{{- end -}}
+{{- if and .Values.features.minioClient.enabled (not (has .Values.components.minioClient.persistenceMarker.bucket .Values.components.minioClient.buckets)) -}}
+{{- fail "components.minioClient.persistenceMarker.bucket must be listed in components.minioClient.buckets" -}}
+{{- end -}}
+{{- if and .Values.features.minio.enabled (eq (.Values.components.minio.apiPort | int) (.Values.components.minio.consolePort | int)) -}}
+{{- fail "components.minio.apiPort and components.minio.consolePort must be different" -}}
+{{- end -}}
+{{- if and .Values.features.postgresql.enabled .Values.features.sourcePostgresql.enabled (eq .Values.components.postgresql.clusterName .Values.components.sourcePostgresql.clusterName) -}}
+{{- fail "main and source PostgreSQL clusters must use different names" -}}
 {{- end -}}
 {{- if and .Values.features.icebergRest.enabled (not .Values.features.minio.enabled) -}}
 {{- fail "features.icebergRest requires features.minio" -}}
@@ -94,12 +118,9 @@
 {{- end -}}
 
 {{- $planned := dict
-  "postgresql" .Values.features.postgresql.enabled
   "cdcPostgresql" .Values.features.cdcPostgresql.enabled
   "systemLoadGenerator" .Values.features.systemLoadGenerator.enabled
   "flashSaleLoadGenerator" .Values.features.flashSaleLoadGenerator.enabled
-  "minio" .Values.features.minio.enabled
-  "minioClient" .Values.features.minioClient.enabled
   "icebergRest" .Values.features.icebergRest.enabled
   "spark" .Values.features.spark.enabled
   "trino" .Values.features.trino.enabled
@@ -120,6 +141,6 @@
 -}}
 {{- range $feature, $enabled := $planned -}}
 {{- if $enabled -}}
-{{- fail (printf "features.%s is planned but not implemented in Phase 2" $feature) -}}
+{{- fail (printf "features.%s is planned but not implemented in Phase 3A" $feature) -}}
 {{- end -}}
 {{- end -}}

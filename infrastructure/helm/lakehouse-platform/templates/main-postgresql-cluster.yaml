@@ -1,0 +1,38 @@
+{{- if .Values.features.postgresql.enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Values.components.postgresql.clusterName | quote }}
+  namespace: {{ .Values.namespace.name | quote }}
+  labels:
+    {{- include "lakehouse-platform.postgresqlLabels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.components.postgresql.instances }}
+  imageName: {{ .Values.components.postgresql.imageName | quote }}
+  imagePullPolicy: {{ .Values.components.postgresql.imagePullPolicy }}
+  enableSuperuserAccess: false
+  enablePDB: false
+  inheritedMetadata:
+    labels:
+      app.kubernetes.io/name: {{ include "lakehouse-platform.name" . | quote }}
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      app.kubernetes.io/component: "postgresql"
+      app.kubernetes.io/part-of: "lakehouse-platform"
+  bootstrap:
+    initdb:
+      database: {{ .Values.components.postgresql.database | quote }}
+      owner: {{ .Values.components.postgresql.owner | quote }}
+      secret:
+        name: {{ .Values.components.postgresql.credentialsSecret.name | quote }}
+      postInitApplicationSQLRefs:
+        configMapRefs:
+          - name: {{ include "lakehouse-platform.mainPostgresqlBootstrapName" . }}
+            key: 01-main.sql
+  storage:
+    size: {{ .Values.components.postgresql.storage.size | quote }}
+    {{- with .Values.components.postgresql.storage.storageClass }}
+    storageClass: {{ . | quote }}
+    {{- end }}
+  resources:
+    {{- toYaml .Values.components.postgresql.resources | nindent 4 }}
+{{- end }}

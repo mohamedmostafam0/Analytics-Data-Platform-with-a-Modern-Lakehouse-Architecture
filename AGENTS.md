@@ -14,7 +14,8 @@ deployment code.
 - `infrastructure/kind/`: pinned disposable local-cluster configuration.
 - `infrastructure/kubernetes/`: non-Helm bootstrap manifests and guidance.
 - `infrastructure/operators/`: pinned operator decisions and checksums.
-- `infrastructure/scripts/`: static checks and explicit Phase 2 lifecycle helpers.
+- `infrastructure/images/`: pinned local-only compatibility image definitions.
+- `infrastructure/scripts/`: static checks and explicit Phase 2/3A lifecycle helpers.
 
 ## Safe laptop commands
 
@@ -32,10 +33,11 @@ the user explicitly approves the resource cost. Starting Kafka, Spark, Flink,
 Airflow, Trino, ClickHouse, MinIO, OpenSearch, and Superset together requires
 explicit approval.
 
-The Phase 2 runtime helpers start only kind, CloudNativePG, and `items-loadgen`.
-They require explicit runtime approval and must not be generalized to later phases.
-Hibernation retains the PostgreSQL PVC; cluster/image/PVC deletion is never an
-automatic validation step.
+The runtime helpers start only the explicitly approved slice. Phase 2 uses kind,
+CloudNativePG, and `items-loadgen`; Phase 3A adds a separate main PostgreSQL and
+local-only S3 compatibility target. They must not be generalized to messaging or
+processing. Hibernation retains PostgreSQL and MinIO PVCs; cluster/image/PVC
+deletion is never an automatic validation step.
 
 ## Safety and migration rules
 

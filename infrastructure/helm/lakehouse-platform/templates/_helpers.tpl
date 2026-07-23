@@ -12,7 +12,7 @@
 {{- end -}}
 {{- end -}}
 
-{{/* Common Kubernetes labels shared by every Phase 2 resource. */}}
+{{/* Common Kubernetes labels shared by every migrated resource. */}}
 {{- define "lakehouse-platform.baseLabels" -}}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | quote }}
 app.kubernetes.io/name: {{ include "lakehouse-platform.name" . | quote }}
@@ -20,6 +20,74 @@ app.kubernetes.io/instance: {{ .Release.Name | quote }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/part-of: "lakehouse-platform"
 app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+{{- end -}}
+
+{{/* Stable selector labels for the main PostgreSQL Cluster. */}}
+{{- define "lakehouse-platform.postgresqlSelectorLabels" -}}
+cnpg.io/cluster: {{ .Values.components.postgresql.clusterName | quote }}
+{{- end -}}
+
+{{/* Full main PostgreSQL labels. */}}
+{{- define "lakehouse-platform.postgresqlLabels" -}}
+{{ include "lakehouse-platform.baseLabels" . }}
+app.kubernetes.io/component: "postgresql"
+{{- end -}}
+
+{{/* Main PostgreSQL bootstrap ConfigMap name. */}}
+{{- define "lakehouse-platform.mainPostgresqlBootstrapName" -}}
+{{- printf "%s-main-postgresql-bootstrap" (include "lakehouse-platform.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/* Stable MinIO selector labels. */}}
+{{- define "lakehouse-platform.minioSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "lakehouse-platform.name" . | quote }}
+app.kubernetes.io/instance: {{ .Release.Name | quote }}
+app.kubernetes.io/component: "minio"
+{{- end -}}
+
+{{/* Full MinIO labels. */}}
+{{- define "lakehouse-platform.minioLabels" -}}
+{{ include "lakehouse-platform.baseLabels" . }}
+app.kubernetes.io/component: "minio"
+{{- end -}}
+
+{{/* Stable MinIO client selector labels. */}}
+{{- define "lakehouse-platform.minioClientSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "lakehouse-platform.name" . | quote }}
+app.kubernetes.io/instance: {{ .Release.Name | quote }}
+app.kubernetes.io/component: "minio-client"
+{{- end -}}
+
+{{/* Full MinIO client labels. */}}
+{{- define "lakehouse-platform.minioClientLabels" -}}
+{{ include "lakehouse-platform.baseLabels" . }}
+app.kubernetes.io/component: "minio-client"
+{{- end -}}
+
+{{/* Release-qualified MinIO names. */}}
+{{- define "lakehouse-platform.minioName" -}}
+{{- printf "%s-minio" (include "lakehouse-platform.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "lakehouse-platform.minioClientJobName" -}}
+{{- printf "%s-minio-bootstrap" (include "lakehouse-platform.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/* Prefer immutable image digests when supplied. */}}
+{{- define "lakehouse-platform.minioImage" -}}
+{{- if .Values.components.minio.image.digest -}}
+{{- printf "%s@%s" .Values.components.minio.image.repository .Values.components.minio.image.digest -}}
+{{- else -}}
+{{- printf "%s:%s" .Values.components.minio.image.repository .Values.components.minio.image.tag -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "lakehouse-platform.minioClientImage" -}}
+{{- if .Values.components.minioClient.image.digest -}}
+{{- printf "%s@%s" .Values.components.minioClient.image.repository .Values.components.minioClient.image.digest -}}
+{{- else -}}
+{{- printf "%s:%s" .Values.components.minioClient.image.repository .Values.components.minioClient.image.tag -}}
+{{- end -}}
 {{- end -}}
 
 {{/* Foundation labels. */}}

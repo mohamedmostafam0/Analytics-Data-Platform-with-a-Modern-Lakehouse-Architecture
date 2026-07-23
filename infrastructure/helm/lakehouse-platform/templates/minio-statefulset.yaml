@@ -1,0 +1,120 @@
+{{- if .Values.features.minio.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "lakehouse-platform.minioName" . }}
+  namespace: {{ .Values.namespace.name | quote }}
+  labels:
+    {{- include "lakehouse-platform.minioLabels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "lakehouse-platform.minioName" . }}
+  replicas: 1
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      {{- include "lakehouse-platform.minioSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lakehouse-platform.minioSelectorLabels" . | nindent 8 }}
+        app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+        app.kubernetes.io/part-of: "lakehouse-platform"
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: minio
+          image: {{ include "lakehouse-platform.minioImage" . | quote }}
+          imagePullPolicy: {{ .Values.components.minio.image.pullPolicy }}
+          args:
+            - server
+            - /data
+            - --address
+            - {{ printf ":%d" (.Values.components.minio.apiPort | int) | quote }}
+            - --console-address
+            - {{ printf ":%d" (.Values.components.minio.consolePort | int) | quote }}
+          env:
+            - name: HOME
+              value: /tmp
+            - name: MINIO_BROWSER
+              value: "off"
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.components.minio.credentialsSecret.name | quote }}
+                  key: {{ .Values.components.minio.credentialsSecret.usernameKey | quote }}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.components.minio.credentialsSecret.name | quote }}
+                  key: {{ .Values.components.minio.credentialsSecret.passwordKey | quote }}
+          ports:
+            - name: api
+              containerPort: {{ .Values.components.minio.apiPort }}
+              protocol: TCP
+            - name: console
+              containerPort: {{ .Values.components.minio.consolePort }}
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: api
+            failureThreshold: 30
+            periodSeconds: 2
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: api
+            failureThreshold: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: api
+            failureThreshold: 3
+            periodSeconds: 20
+            timeoutSeconds: 2
+          resources:
+            {{- toYaml .Values.components.minio.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: temporary
+              mountPath: /tmp
+      volumes:
+        - name: temporary
+          emptyDir:
+            sizeLimit: 64Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "lakehouse-platform.minioLabels" . | nindent 10 }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        {{- with .Values.components.minio.storage.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.components.minio.storage.size | quote }}
+{{- end }}
